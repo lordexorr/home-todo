@@ -26,11 +26,12 @@ def _todo(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: 
 
 
 @websocket_api.websocket_command({vol.Required("type"): "home_todo/subscribe"})
-@callback
-def ws_subscribe(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict) -> None:
+@websocket_api.async_response
+async def ws_subscribe(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict) -> None:
     """Everything the user's page shows, then each change to it as it's made, from any page."""
     if not (todo := _todo(hass, connection, msg)):
         return
+    people = await todo.async_people()
 
     @callback
     def forward(payload: dict[str, Any]) -> None:
@@ -38,7 +39,7 @@ def ws_subscribe(hass: HomeAssistant, connection: websocket_api.ActiveConnection
 
     connection.subscriptions[msg["id"]] = todo.subscribe(connection.user.id, forward)
     connection.send_result(msg["id"])
-    forward(todo.everything(connection.user))
+    forward(todo.everything(connection.user, people))
 
 
 @websocket_api.websocket_command({
@@ -54,7 +55,7 @@ def ws_apply(hass: HomeAssistant, connection: websocket_api.ActiveConnection, ms
     if not todo.can_use(connection.user.id, msg["list_id"]):
         connection.send_error(msg["id"], "unauthorized", "That list belongs to someone else.")
         return
-    connection.send_result(msg["id"], todo.apply(msg["list_id"], msg["changes"]))
+    connection.send_result(msg["id"], todo.apply(msg["list_id"], msg["changes"], connection.user))
 
 
 @websocket_api.websocket_command({vol.Required("type"): "home_todo/archive", vol.Required("list_id"): str})

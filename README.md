@@ -27,6 +27,17 @@ Assistant theme, light or dark. After an update, a Home To-Do page that was alre
 Switch between them with the buttons beside the logo. Each list has its own tasks, log, scratchpad, task numbers and
 categories, so categories made on Mine stay private.
 
+## Requests
+
+A Family task can be for someone: choose them with **For** beside the due date, in the task's details, or with
+`>Name` in the command bar, such as `add >Col Pick up the dry cleaning ^fri`. The start of a name is enough, and anyone
+with a Home Assistant login can be chosen. Everyone sees who each Family task is for.
+
+The person it's for is told on their phone, and whoever asked is told when it's done. Each person chooses where their
+notifications go under **Settings** on Home To-Do's page: a phone with Home Assistant's app, or Home Assistant's own
+notifications. Tapping one on a phone opens Home To-Do. Tasks for you are marked, the **Family** button counts them,
+and they're on your own calendar if you've turned it on.
+
 ## Repeating tasks
 
 A task can repeat every so many days, weeks, months or years, set with the ↻ button beside its due date, in its

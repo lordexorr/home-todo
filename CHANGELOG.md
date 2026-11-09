@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.0
+
+- **Requests:** a Family task can be for someone, chosen with **For** beside the due date, in the task's details, or with `>Name` in the command bar, such as `add >Col Pick up the dry cleaning ^fri`. The person it's for is told on their phone, and whoever asked is told when it's done. Tasks for you are marked, the **Family** button counts them, and they're on your own calendar if you've turned it on.
+- **Where notifications go:** each person chooses under **Settings**, from the phones with Home Assistant's app and Home Assistant's own notifications. Tapping one on a phone opens Home To-Do.
+- `for # Name` makes an existing Family task a request, and `for # none` takes it off them.
+
 ## 0.4.0
 
 - **Stays quick as the lists grow:** each change sends open pages just what changed, instead of the whole list with its entire log.

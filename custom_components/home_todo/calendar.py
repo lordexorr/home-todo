@@ -3,7 +3,7 @@ under Settings on Home To-Do's page. Every calendar is visible to everyone who s
 why a personal one is only there when its owner asks for it.
 
 Each shows its list's open tasks that have a due date, as all-day events. A task that repeats on a schedule also shows
-on each date it'll be due on after today."""
+on each date it'll be due on after today. A person's calendar also has the Family tasks that are for them."""
 from __future__ import annotations
 
 import asyncio
@@ -54,7 +54,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry[HomeTodo],
 
     @callback
     def changed(lists: set[str], calendars_changed: bool) -> None:
-        for list_id in lists:
+        # Family's requests are on the calendars of the people they're for too.
+        for list_id in set(calendars) if model.FAMILY in lists else lists:
             if (cal := calendars.get(list_id)) is not None:
                 cal.refresh()
         if calendars_changed:
@@ -90,34 +91,38 @@ class HomeTodoCalendar(CalendarEntity):
         if self._added:
             self.async_write_ha_state()
 
-    def _tasks(self) -> list[dict[str, Any]]:
-        lst = self._todo.doc["lists"].get(self.list_id)
-        return lst["todos"] if lst else []
+    def _tasks(self) -> list[tuple[str, dict[str, Any]]]:
+        """(list id, task) for each task on this calendar."""
+        lists = self._todo.doc["lists"]
+        own = [(self.list_id, t) for t in lists[self.list_id]["todos"]] if self.list_id in lists else []
+        if self.list_id == model.FAMILY:
+            return own
+        return own + [(model.FAMILY, t) for t in lists[model.FAMILY]["todos"] if t["for"] == self.list_id]
 
-    def _event(self, task: dict[str, Any], day: date) -> CalendarEvent:
-        summary, description = model.event_text(task)
+    def _event(self, list_id: str, task: dict[str, Any], day: date) -> CalendarEvent:
+        summary, description = model.event_text(task, self._todo.names)
         return CalendarEvent(start=day, end=day + timedelta(days=1), summary=summary, description=description or None,
-                             uid=f"{self.list_id}-{task['id']}-{day.isoformat()}")
+                             uid=f"{list_id}-{task['id']}-{day.isoformat()}")
 
     @property
     def event(self) -> CalendarEvent | None:
         """Today's task, or the next one due."""
         today = dt_util.now().date()
-        soonest: tuple[date, int, dict[str, Any]] | None = None
-        for index, task in enumerate(self._tasks()):
+        soonest: tuple[date, str, dict[str, Any]] | None = None
+        for list_id, task in self._tasks():
             day = model.next_day(task, today)
             if day is not None and (soonest is None or day < soonest[0]):
-                soonest = (day, index, task)
-        return self._event(soonest[2], soonest[0]) if soonest else None
+                soonest = (day, list_id, task)
+        return self._event(soonest[1], soonest[2], soonest[0]) if soonest else None
 
     async def async_get_events(self, hass: HomeAssistant, start_date: datetime,
                                end_date: datetime) -> list[CalendarEvent]:
         first, last = dt_util.as_local(start_date).date(), dt_util.as_local(end_date).date()
         today = dt_util.now().date()
         events = []
-        for task in self._tasks():
+        for list_id, task in self._tasks():
             for day in model.task_days(task, first, last, today):
-                event = self._event(task, day)
+                event = self._event(list_id, task, day)
                 if event.start_datetime_local < end_date and event.end_datetime_local > start_date:
                     events.append(event)
         events.sort(key=lambda e: e.start)

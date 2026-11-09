@@ -382,6 +382,13 @@
   .older{ display:flex; justify-content:center; padding:14px 12px 18px; }
   .row.arcrow{ cursor:default; }
   .row.arcrow .text{ color:var(--ink-2); }
+  .forbadge{ display:inline-flex; align-items:center; font-size:10.5px; font-weight:600; padding:1px 7px;
+    border-radius:5px; border:1px solid var(--line-2); color:var(--ink-2); background:var(--raise); }
+  .forbadge.me{ color:var(--accent); border-color:var(--accent-line); background:var(--accent-soft); }
+  .row.forme{ box-shadow:inset 2px 0 0 var(--accent); }
+  .fcount{ display:inline-flex; align-items:center; justify-content:center; min-width:17px; height:17px; margin-left:6px;
+    padding:0 5px; border-radius:999px; background:var(--accent); color:#fff; font-size:10.5px; font-weight:700; }
+  .field.forsel{ flex:0 0 auto; width:122px; font-size:12.5px; }
   .rbadge{ display:inline-flex; align-items:center; gap:4px; font-family:var(--mono); font-size:10.5px; font-weight:500;
     padding:1px 7px; border-radius:5px; border:1px solid var(--line-2); color:var(--ink-3); background:var(--raise); }
 
@@ -669,6 +676,7 @@
         </div>
         <input type="date" class="field date empty" id="todoDue" title="Due date (optional)">
         <div class="rpick" data-target="todo"></div>
+        <select class="field forsel" id="todoFor" title="Who it's for" hidden></select>
         <input class="field grow" id="todoText" placeholder="Add a task…" autocomplete="off">
         <button class="btn" id="todoAdd">Add</button>
       </div>
@@ -757,6 +765,10 @@
           <span class="dlabel">Repeat</span>
           <div class="rpick" data-target="detail"></div>
         </div>
+        <div class="drow" id="dForRow" hidden>
+          <span class="dlabel">For</span>
+          <select class="field forsel" id="dFor" title="Who it's for"></select>
+        </div>
         <div class="drow" id="dWaitRow" hidden>
           <input class="field grow" id="dWaitOn" placeholder="Waiting on… (a delivery, a call back, a contractor)" autocomplete="off">
           <span class="dlabel">Follow up</span>
@@ -814,6 +826,15 @@
         Family's tasks with a due date are always on it. Turned on, yours appear there too, as a calendar of your
         own, and <b>everyone who signs in to Home Assistant can see them</b>.
       </div>
+      <div class="msub">Requests</div>
+      <div class="cfgrow" style="margin-top:0">
+        <span class="dlabel">Notify me on</span>
+        <select class="field grow" id="cfgNotify" style="font-family:inherit"></select>
+      </div>
+      <div class="mnote" style="margin-top:6px;padding-top:0;border:0">
+        When someone gives you a Family task, or finishes one you asked for, Home Assistant tells you here. Tapping a
+        notification on your phone opens Home To-Do.
+      </div>
       <div class="cfgrow end">
         <button class="btn" id="cfgSave">Save</button>
       </div>
@@ -834,6 +855,7 @@
         <span class="c">wait &lt;#&gt; &lt;on&gt;</span><span class="d">Park a task as waiting and say what it is waiting on.</span>
         <span class="c">resume &lt;#&gt;</span><span class="d">Move a waiting task back to active.</span>
         <span class="c">pri &lt;#&gt; &lt;hi|md|lo&gt;</span><span class="d">Set priority.</span>
+        <span class="c">for &lt;#&gt; &lt;name&gt;</span><span class="d">Make a Family task a request for someone, or <code>none</code> to take it off them.</span>
         <span class="c">repeat &lt;#&gt; &lt;how&gt;</span><span class="d">Make a task repeat: <code>*1w</code> on a schedule, <code>~3mo</code> after it's done, or <code>none</code>.</span>
         <span class="c">sub &lt;#&gt; &lt;text&gt;</span><span class="d">Add a side task under a task. <code>step</code> works too.</span>
         <span class="c">note &lt;text&gt;</span><span class="d">Append a line to whichever notes are open — the selected task, or the scratchpad.</span>
@@ -858,6 +880,14 @@
         Each one ticks off on its own and can carry its own notes, opened with the ≡ button beside it.
         In the task list they fold away behind the <b>2/5</b> counter; click it to show or hide them.
         They follow the task into the completed log.
+      </div>
+      <div class="msub">Requests</div>
+      <div class="mnote" style="margin-top:0;padding-top:0;border:0">
+        A Family task can be for someone: choose them with <b>For</b> beside the due date, in the task's details, or
+        with <code>&gt;Name</code> in the command bar, such as <code>add &gt;Col Pick up the dry cleaning ^fri</code>.
+        A start of a name is enough, and <code>&gt;Name</code> from Mine puts the task on Family.<br>
+        They're told on their phone, and you're told when they've done it, once each of you has chosen where under
+        <b>Settings</b>. Tasks for you are marked, and the <b>Family</b> button counts them.
       </div>
       <div class="msub">Repeating tasks</div>
       <div class="mnote" style="margin-top:0;padding-top:0;border:0">
@@ -897,7 +927,8 @@
       <div class="mnote" style="margin-top:0;padding-top:0;border:0">
         <b>!</b> at the start of a task sets high priority — <code>add !water heater is leaking</code>.<br>
         <b>^friday</b> or <b>^+2d</b> in an <code>add</code> sets the due date inline.<br>
-        <b>*1w</b> or <b>~3mo</b> in an <code>add</code> makes the task repeat, on a schedule or after it's done.
+        <b>*1w</b> or <b>~3mo</b> in an <code>add</code> makes the task repeat, on a schedule or after it's done.<br>
+        <b>&gt;Name</b> in an <code>add</code> makes it a Family task for that person.
       </div>
       <div class="msub">Keyboard</div>
       <div class="cmdref">
@@ -924,7 +955,7 @@
   /* ============ state ============ */
   var S = {
     seq: 1, todos: [], done: [], categories: [], notes: "", archived: 0,   // the list on screen
-    cfg: { links: defaultLinks(), calendar: false, linksSaved: false },
+    cfg: { links: defaultLinks(), calendar: false, notify: "", linksSaved: false },
     ui: defaultUi()
   };
 
@@ -942,6 +973,8 @@
       subsOpen: !!t.subsOpen,
       notes: String(t.notes||""),
       repeat: normRepeat(t.repeat),
+      for: typeof t.for === "string" ? t.for : "",           // who it's for: a request, on Family
+      forBy: typeof t.forBy === "string" ? t.forBy : "",     // who asked, as Home Assistant recorded it
       created: +t.created || Date.now(),
       updated: +t.updated || +t.created || Date.now()
     };
@@ -953,7 +986,10 @@
       category: e.category || e.client || null,
       ts: +e.ts || Date.now(),
       subs: normSubs(e.subs),
-      notes: String(e.notes||"")
+      notes: String(e.notes||""),
+      from: +e.from || 0,                                     // the task it was ticked off from
+      for: typeof e.for === "string" ? e.for : "",
+      forBy: typeof e.forBy === "string" ? e.forBy : ""
     };
   }
   // How often a task repeats, or null. "from" is what the next due date counts from: "due", on a schedule, or
@@ -1039,6 +1075,7 @@
             .filter(function(l){ return l.label && l.path; })
         : defaultLinks(),
       calendar: cfg.calendar === true,   // this person's list on Home Assistant's calendar
+      notify: typeof cfg.notify === "string" && /^notify\.[a-z0-9_]+$/.test(cfg.notify) ? cfg.notify : "",
       linksSaved: cfg.linksSaved === true
     };
   }
@@ -1055,6 +1092,7 @@
   var sent = { decks:{}, prefs:"" };       // what this page has sent: edits are measured from here
   var acked = { decks:{}, prefs:"" };      // what Home Assistant has confirmed it has
   var outdated = false;                     // Home Assistant is running another version of Home To-Do
+  var people = [];                          // everyone with a login: who a request can be for
   var ERR_CONNECTION_LOST = 3;                      // home-assistant-js-websocket's code for a dropped connection
 
   function clone(v){ return JSON.parse(JSON.stringify(v)); }
@@ -1212,6 +1250,10 @@
         return;
       }
       me = ev.user || me;
+      if(Array.isArray(ev.people)){
+        people = ev.people.filter(function(x){ return x && typeof x.id === "string" && typeof x.name === "string"; });
+        renderForPickers();
+      }
       connMsg = "";
       setName(ev.name);
       if(!booted){ start(ev); return; }
@@ -1269,6 +1311,7 @@
       if(id === active) loadActive(true);
     });
     if(!ok){ resync(); return false; }
+    renderListSeg();                            // the Family button counts requests for you
     if(ev.prefs){
       var was = prefsNow();
       adoptPrefs(ev.prefs);
@@ -1330,8 +1373,39 @@
     save();                                   // remembers which list was open
     renderListSeg(); syncAll();
   }
+  function personName(id){
+    for(var i = 0; i < people.length; i++) if(people[i].id === id) return people[i].name;
+    return "someone";
+  }
+  // A person from what was typed after >: their whole name or first name, then the start of one, ignoring case
+  // and spaces. Null if no one, or more than one, matches.
+  function findPerson(raw){
+    var key = categoryKey(raw);
+    if(!key) return null;
+    var keys = people.map(function(x){ return [categoryKey(x.name), categoryKey(x.name.split(/\s+/)[0])]; });
+    for(var i = 0; i < people.length; i++) if(keys[i][0] === key || keys[i][1] === key) return people[i].id;
+    var hits = people.filter(function(x, n){ return keys[n][0].indexOf(key) === 0; });
+    return hits.length === 1 ? hits[0].id : null;
+  }
+  function renderForPickers(){
+    ["todoFor","dFor"].forEach(function(id){
+      var sel = $(id), was = sel.value;
+      sel.innerHTML = '<option value="">' + (id === "todoFor" ? "For anyone" : "Anyone") + '</option>' +
+        people.map(function(x){
+          return '<option value="' + esc(x.id) + '">' + esc(x.name) + (me && x.id === me.id ? " (me)" : "") + '</option>';
+        }).join("");
+      sel.value = was;
+    });
+  }
+  function forMe(t){ return !!(me && t.for === me.id); }
   function renderListSeg(){
     var kind = active === "family" ? "family" : "mine";
+    // The Family button counts the Family tasks that are for you.
+    var family = active === "family" ? S.todos : ((sent.decks.family || {}).todos || []);
+    var n = family.filter(forMe).length, fb = document.querySelector('#listSeg button[data-list="family"]');
+    fb.innerHTML = "Family" + (n ? '<span class="fcount">' + n + '</span>' : "");
+    fb.title = n ? n + " Family task" + (n === 1 ? " is" : "s are") + " for you" : "";
+    $("todoFor").hidden = active !== "family";
     Array.prototype.forEach.call(document.querySelectorAll("#listSeg button"), function(b){
       b.classList.toggle("on", b.getAttribute("data-list") === kind);
     });
@@ -1664,6 +1738,7 @@
            (item.category || "").toLowerCase().indexOf(q) >= 0 ||
            (item.notes || "").toLowerCase().indexOf(q) >= 0 ||
            (item.waitingOn || "").toLowerCase().indexOf(q) >= 0 ||
+           (item.for ? personName(item.for).toLowerCase().indexOf(q) >= 0 : false) ||
            ((item.subs || []).some(function(sb){
              return sb.text.toLowerCase().indexOf(q) >= 0 || sb.notes.toLowerCase().indexOf(q) >= 0;
            }));
@@ -1693,6 +1768,8 @@
     var sub = [];
     var dm = t.due ? dueMeta(t.due) : null;
     if(dm) sub.push('<span class="due ' + dm.cls + '" title="' + esc(dm.title) + '">' + esc(dm.text) + '</span>');
+    if(t.for) sub.push('<span class="forbadge' + (forMe(t) ? " me" : "") + '">For ' +
+      esc(forMe(t) ? "you" : personName(t.for)) + '</span>');
     if(t.repeat) sub.push('<span class="rbadge" title="' + esc(repeatText(t.repeat)) + '">\u21BB ' + esc(repeatShort(t.repeat)) + '</span>');
     if(t.status === "waiting"){
       var w = "Waiting" + (t.waitingOn ? " on <b>" + esc(t.waitingOn) + "</b>" : "");
@@ -1708,7 +1785,7 @@
       '" data-subtoggle="' + t.id + '" title="' + (t.subsOpen ? "Hide" : "Show") + ' side tasks">' +
       '<span class="cv">\u25B8</span>' + st.done + '/' + st.total + '</button>');
     var isSel = selected && selected.type === "todo" && selected.id === t.id;
-    return '<div class="row todo' + (t.status === "waiting" ? " waiting" : "") + (isSel ? " sel" : "") +
+    return '<div class="row todo' + (t.status === "waiting" ? " waiting" : "") + (isSel ? " sel" : "") + (forMe(t) ? " forme" : "") +
         (flashIds[t.id] ? " flash" : "") + '" data-id="' + t.id + '" data-kind="todo">' +
       GRIP +
       '<button class="check" data-check="' + t.id + '" title="Mark complete" aria-label="Complete task ' + t.id + '"></button>' +
@@ -1830,6 +1907,7 @@
         var est = subStats(e);
         if(est.total) subBits.push('<span class="subcount">' + est.done + '/' + est.total + ' done</span>');
         if(e.notes.trim()) subBits.push('<span class="hasnote">' + NOTEICON + e.notes.trim().split(/\n/).length + '</span>');
+        if(e.for) subBits.push('<span class="forbadge">For ' + esc(forMe(e) ? "you" : personName(e.for)) + '</span>');
         var sub = subBits.length ? '<div class="rsub">' + subBits.join("") + '</div>' : '';
         h += '<div class="row logrow' + (isSel ? " sel" : "") + (flashIds[e.id] ? " flash" : "") +
             '" data-id="' + e.id + '" data-kind="done">' +
@@ -1947,6 +2025,8 @@
       $("dDue").classList.toggle("empty", !$("dDue").value);
       $("dWaitRow").hidden = !(isTodo && item.status === "waiting");
       $("dRepRow").hidden = !isTodo;
+      $("dForRow").hidden = !(isTodo && active === "family");
+      if(isTodo) $("dFor").value = item.for || "";
       renderRepeatPicker("detail");
       renderSubs();
       if(isTodo){ setField($("dWaitOn"), item.waitingOn || ""); $("dFollow").value = item.followUp || ""; }
@@ -2161,15 +2241,16 @@
 
   /* ============ actions ============ */
   function doFlash(id){ flashIds[id] = 1; setTimeout(function(){ delete flashIds[id]; }, 700); }
-  function addTodo(text, category, pri, due, repeat){
+  function addTodo(text, category, pri, due, repeat, forWho){
     var canon = category ? ensureCategory(category, true) : null;
     var t = normTodo({ id:S.seq++, text:text, category:canon, pri:pri||"md", due:due||"", repeat:repeat||null,
-                       created:Date.now() });
+                       for:forWho || "", forBy:forWho && me ? me.id : "", created:Date.now() });
     if(t.repeat && t.repeat.from === "due" && !t.due) t.due = todayStr();   // a schedule starts somewhere
     anchorRepeat(t);
     S.todos.unshift(t);
     doFlash(t.id); save(); syncLists();
-    toast("Task #" + t.id + " added" + (canon ? " for " + canon : "") + (t.repeat ? ", repeating " + repeatShort(t.repeat) : ""), "info");
+    toast("Task #" + t.id + " added" + (canon ? " for " + canon : "") + (t.repeat ? ", repeating " + repeatShort(t.repeat) : "") +
+          (t.for ? ", for " + (forMe(t) ? "you" : personName(t.for)) : ""), "info");
     return t;
   }
   function addCompleted(text, category, ts, notes){
@@ -2185,7 +2266,8 @@
     if(t.repeat){ completeRepeat(t); return; }
     var idx = S.todos.indexOf(t);
     S.todos = S.todos.filter(function(x){ return x.id !== id; });
-    var entry = normDone({ id:t.id, category:t.category, text:t.text, ts:Date.now(), notes:t.notes, subs:t.subs });
+    var entry = normDone({ id:t.id, category:t.category, text:t.text, ts:Date.now(), notes:t.notes, subs:t.subs,
+                           from:t.id, for:t.for, forBy:t.forBy });
     S.done.push(entry);
     if(selected && selected.type === "todo" && selected.id === id) selected = { type:"done", id:id };
     doFlash(t.id); save(); syncAll();
@@ -2201,7 +2283,8 @@
   function completeRepeat(t){
     var keep = ["due","subs","status","waitingOn","followUp","updated","repeat"], before = {};
     keep.forEach(function(k){ before[k] = clone(t[k]); });
-    var entry = normDone({ id:S.seq++, category:t.category, text:t.text, ts:Date.now(), notes:t.notes, subs:clone(t.subs) });
+    var entry = normDone({ id:S.seq++, category:t.category, text:t.text, ts:Date.now(), notes:t.notes, subs:clone(t.subs),
+                           from:t.id, for:t.for, forBy:t.forBy });
     S.done.push(entry);
     t.due = nextDue(t, todayStr());
     anchorRepeat(t);
@@ -2214,6 +2297,22 @@
       keep.forEach(function(k){ t[k] = before[k]; });
       save(); syncAll();
     });
+  }
+  // Makes a Family task a request for someone, or takes it off them. Home Assistant tells them.
+  function setFor(id, who){
+    var t = findTodo(id); if(!t) return;
+    t.for = who || ""; t.forBy = who && me ? me.id : ""; t.updated = Date.now();
+    save(); syncAll();
+    toast(who ? "#" + id + " is for " + (forMe(t) ? "you" : personName(who)) : "#" + id + " is no longer for anyone", "info");
+  }
+  // A request typed with >Name always goes on Family.
+  function addRequest(p, fallbackCategory){
+    if(active !== "family"){
+      switchList("family");
+      if(active !== "family"){ toast("Couldn't switch to Family to add the request", "err"); return; }
+      fallbackCategory = null;                 // categories belong to their list
+    }
+    addTodo(p.text, p.category || fallbackCategory, p.pri || "md", p.due || "", p.repeat, p.forWho);
   }
   function setRepeat(id, r){
     var t = findTodo(id); if(!t) return;
@@ -2282,7 +2381,7 @@
     toast(selected ? "Added to the notes on #" + selected.id : "Added to the scratchpad", "info");
   }
 
-  function syncLists(){ renderTodos(); renderLog(); renderMetrics(); }
+  function syncLists(){ renderTodos(); renderLog(); renderMetrics(); renderListSeg(); }
   function syncAll(){ renderTodos(); renderLog(); renderMetrics(); renderNotes(); renderPops(); renderLinks(); }
 
   /* ============ toasts ============ */
@@ -2336,7 +2435,7 @@
 
   /* ============ command bar ============ */
   function parseTags(tokens){
-    var category = null, pri = null, due = null, repeat = null, rest = [];
+    var category = null, pri = null, due = null, repeat = null, forWho = null, forBad = null, rest = [];
     tokens.forEach(function(tok){
       var t = tok;
       if(t.charAt(0) === "!"){ var bare = t.replace(/^!+/, ""); pri = "hi"; t = bare; }
@@ -2346,13 +2445,14 @@
         var w = parseWhen(t.slice(1));
         if(w !== null){ due = w; return; }
       }
+      if(t.charAt(0) === ">" && t.length > 1){ forWho = findPerson(t.slice(1)); if(!forWho) forBad = t.slice(1); return; }
       if((t.charAt(0) === "*" || t.charAt(0) === "~") && t.length > 1){
         var r = parseRepeat(t.slice(1));
         if(r){ r.from = t.charAt(0) === "~" ? "done" : "due"; repeat = r; return; }
       }
       rest.push(t);
     });
-    return { category:category, pri:pri, due:due, repeat:repeat, text:rest.join(" ").trim() };
+    return { category:category, pri:pri, due:due, repeat:repeat, forWho:forWho, forBad:forBad, text:rest.join(" ").trim() };
   }
   function runCommand(line){
     line = String(line).trim();
@@ -2367,6 +2467,8 @@
     if(cmd === "add"){
       var p = parseTags(args);
       if(!p.text){ toast("Try: add Schedule furnace service", "err"); return; }
+      if(p.forBad){ toast("No one called " + p.forBad + " — try their first name", "err"); return; }
+      if(p.forWho){ addRequest(p, pick.todo); return; }
       addTodo(p.text, p.category || pick.todo, p.pri || "md", p.due || "", p.repeat);
     }
     else if(cmd === "log"){
@@ -2404,6 +2506,15 @@
       var tt = findTodo(pid); tt.pri = mapl[lvl]; tt.updated = Date.now();
       save(); syncAll(); toast("#" + pid + " set to " + PLABEL[tt.pri].toLowerCase(), "info");
     }
+    else if(cmd === "for"){
+      var qid = parseInt(args[0], 10), whoRaw = args.slice(1).join(" ").trim();
+      if(isNaN(qid) || !findTodo(qid)){ toast("No open task #" + (args[0] || ""), "err"); return; }
+      if(active !== "family"){ toast("Requests are Family tasks — switch to Family first", "err"); return; }
+      if(/^(none|nobody|anyone)$/i.test(whoRaw)){ setFor(qid, ""); return; }
+      var pid = findPerson(whoRaw);
+      if(!pid){ toast(whoRaw ? "No one called " + whoRaw + " — try their first name" : "Try: for " + qid + " Colleen", "err"); return; }
+      setFor(qid, pid);
+    }
     else if(cmd === "repeat"){
       var rpid = parseInt(args[0], 10), how = (args[1] || "").toLowerCase();
       if(isNaN(rpid) || !findTodo(rpid)){ toast("No open task #" + (args[0] || ""), "err"); return; }
@@ -2435,6 +2546,32 @@
     else if(cmd === "help"){ openModal("helpModal"); }
     else if(cmd === "clear"){ filterQ = ""; clearSelection(); syncLists(); }
     else toast('Unknown command "' + parts[0] + '" — type help', "err");
+  }
+
+  /* ============ where notifications go ============ */
+  // The phones Home Assistant's app has registered, named as their devices are, and Home Assistant's own
+  // notifications. A phone's action is named after its device as the app first registered it.
+  function slugName(v){
+    return String(v || "").normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase()
+      .replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+  }
+  function notifyTargets(){
+    var hass = (HOST && HOST.hass) || {}, services = (hass.services && hass.services.notify) || {};
+    var devices = hass.devices || {}, out = [];
+    Object.keys(services).forEach(function(name){
+      if(name.indexOf("mobile_app_") !== 0) return;
+      var slug = name.slice(11), label = "";
+      Object.keys(devices).some(function(id){
+        var d = devices[id] || {};
+        if(slugName(d.name) === slug || slugName(d.name_by_user) === slug){ label = d.name_by_user || d.name; return true; }
+        return false;
+      });
+      out.push({ value:"notify." + name, label:label || slug.replace(/_/g, " ") + " (phone app)" });
+    });
+    out.sort(function(a, b){ return a.label.localeCompare(b.label); });
+    if(services.persistent_notification)
+      out.push({ value:"notify.persistent_notification", label:"Home Assistant's notifications (the bell in its sidebar)" });
+    return out;
   }
 
   /* ============ repeat pickers ============ */
@@ -2628,9 +2765,12 @@
       var raw = $("todoText").value.trim();
       if(!raw){ $("todoText").focus(); return; }
       var p = parseTags(raw.split(/\s+/));
-      addTodo(p.text || raw, p.category || pick.todo, p.pri || "md", p.due || todoDue.value || "", p.repeat || addRepeat);
+      if(p.forBad){ toast("No one called " + p.forBad + " — try their first name", "err"); return; }
+      var due = p.due || todoDue.value || "", repeat = p.repeat || addRepeat;
+      if(p.forWho){ addRequest({ text:p.text || raw, category:p.category, pri:p.pri, due:due, repeat:repeat, forWho:p.forWho }, pick.todo); }
+      else addTodo(p.text || raw, p.category || pick.todo, p.pri || "md", due, repeat, active === "family" ? $("todoFor").value : "");
       $("todoText").value = ""; todoDue.value = ""; syncTodoDue(); $("todoText").focus();
-      addRepeat = null; renderRepeatPicker("todo");
+      addRepeat = null; renderRepeatPicker("todo"); $("todoFor").value = "";
     }
     function submitLog(){
       rollLogDate();
@@ -2784,6 +2924,9 @@
       t.updated = Date.now();
       save(); syncLists(); renderNotes();
       if(v === "waiting") setTimeout(function(){ $("dWaitOn").focus(); }, 30);
+    });
+    $("dFor").addEventListener("change", function(){
+      var t = selectedTodo(); if(t && active === "family") setFor(t.id, $("dFor").value);
     });
     $("dDue").addEventListener("change", function(){
       var t = selectedTodo(); if(!t) return;
@@ -2978,6 +3121,13 @@
 
     $("mSettings").addEventListener("click", function(){
       $("cfgCalendar").checked = !!S.cfg.calendar;
+      var targets = notifyTargets(), sel = $("cfgNotify");
+      if(S.cfg.notify && !targets.some(function(x){ return x.value === S.cfg.notify; }))
+        targets.push({ value:S.cfg.notify, label:S.cfg.notify + " (not found)" });
+      sel.innerHTML = '<option value="">Nowhere</option>' + targets.map(function(x){
+        return '<option value="' + esc(x.value) + '">' + esc(x.label) + '</option>';
+      }).join("");
+      sel.value = S.cfg.notify;
       fillLinkEditor(S.cfg.links);
       if(!S.cfg.links.length) $("cfgLinks").appendChild(linkRow("", ""));
       openModal("cfgModal");
@@ -2988,6 +3138,7 @@
                          .map(function(l){ return { label:l.label, path:linkUrl(l.path) }; });
       S.cfg.linksSaved = true;
       S.cfg.calendar = $("cfgCalendar").checked;
+      S.cfg.notify = $("cfgNotify").value;
       save(); syncAll(); closeModal("cfgModal");
       if(skipped.length) toast("Settings saved, without " + skipped.map(function(l){ return l.label; }).join(", ") +
                                ": a shortcut needs a web address", "warn");
@@ -3066,6 +3217,7 @@
   window.HOMETODO = { state:S, parseWhen:parseWhen, run:runCommand,
     parseTags:parseTags, categoryToken:categoryToken, categoryKey:categoryKey, theme:applyTheme,
     addSub:addSub, subStats:subStats, nextDue:nextDue, parseRepeat:parseRepeat, linkUrl:linkUrl, setField:setField,
+    findPerson:findPerson, notifyTargets:notifyTargets,
     tick:function(){ if(clockTick) clockTick(); },
     sync:{ changes:listChanges, pending:hasPending, save:save, switchList:switchList,
       active:function(){ return active; }, online:function(){ return online; }, booted:function(){ return booted; },

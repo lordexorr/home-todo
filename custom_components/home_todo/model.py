@@ -12,6 +12,9 @@ A list holds its open tasks ("todos"), its completed log ("done"), log entries m
 scratchpad ("notes"), its category names ("categories"), and "seq", the next task number. Family's categories are shared, and a personal list's are its owner's
 alone. Task numbers belong to a list, and a task keeps its number when it's completed.
 
+A Family task can be for someone ("for", a user id): a request. "forBy" is whoever made it for them, as Home
+Assistant saw it, never as a page says. A log entry keeps both, and "from", the task it was ticked off from.
+
 A task can repeat. Ticked off, it goes to the log under a new number and stays open with its next due date. "from"
 says what that's counted from: "due", on a schedule from its due date, or "done", from the day it was ticked off."""
 from __future__ import annotations
@@ -149,6 +152,8 @@ def norm_todo(t: Any, now: int) -> dict:
         "subsOpen": bool(t.get("subsOpen")),
         "notes": _text(t.get("notes")),
         "repeat": norm_repeat(t.get("repeat")),
+        "for": _text(t.get("for")),
+        "forBy": _text(t.get("forBy")),
         "created": created,
         "updated": _int(t.get("updated")) or created,
     }
@@ -164,6 +169,9 @@ def norm_done(e: Any, now: int) -> dict:
         "ts": _int(e.get("ts")) or now,
         "subs": norm_subs(e.get("subs")),
         "notes": _text(e.get("notes")),
+        "from": _int(e.get("from")),
+        "for": _text(e.get("for")),
+        "forBy": _text(e.get("forBy")),
     }
 
 
@@ -212,6 +220,8 @@ def norm_prefs(raw: Any) -> dict:
     cfg: dict[str, Any] = {}
     if isinstance(cfg_in.get("calendar"), bool):
         cfg["calendar"] = cfg_in["calendar"]
+    if isinstance(cfg_in.get("notify"), str) and re.fullmatch(r"notify\.[a-z0-9_]+", cfg_in["notify"]):
+        cfg["notify"] = cfg_in["notify"]  # where this person's request notifications go
     if isinstance(cfg_in.get("linksSaved"), bool):  # once saved, no links means they removed the example
         cfg["linksSaved"] = cfg_in["linksSaved"]
     if isinstance(cfg_in.get("links"), list):
@@ -277,7 +287,16 @@ def _ordered(items: list[dict], ids: list[int]) -> list[dict]:
     return [k[3] for k in keyed]
 
 
-def apply_changes(doc: dict, list_id: str, changes: Any, now: int | None = None) -> dict[str, dict[str, int]]:
+def _assign(item: dict, current: dict | None, user_id: str) -> None:
+    """Who asked: the person whose change made the task for someone, whatever the page sent."""
+    if current is not None and item["for"] == current["for"]:
+        item["forBy"] = current["forBy"]
+    else:
+        item["forBy"] = user_id if item["for"] else ""
+
+
+def apply_changes(doc: dict, list_id: str, changes: Any, now: int | None = None,
+                  user_id: str = "") -> dict[str, dict[str, int]]:
     """Applies what a page changed in one list. Each task is changed on its own, so edits made on two pages at once
     both stay. A change to a task someone else has since deleted or completed is dropped.
 
@@ -285,11 +304,13 @@ def apply_changes(doc: dict, list_id: str, changes: Any, now: int | None = None)
     one gets the list's next number.
 
     A field an edit leaves out keeps what it was, so a page from before the field existed doesn't erase it. Notes
-    sent with "notesBase", the notes the page started from, are merged with any change someone else made meanwhile."""
+    sent with "notesBase", the notes the page started from, are merged with any change someone else made meanwhile.
+    user_id is who made the change: it's recorded as who asked, for a task made for someone."""
     now = now or now_ms()
     lst = doc["lists"][list_id]
     changes = _dict(changes)
     parts = {key: _dict(changes.get(key)) for key in ("todos", "done")}
+    tasks_before = {x["id"]: x for x in lst["todos"]}  # a log entry takes who it was for from its task
     for key, part in parts.items():
         gone = {_int(i) for i in _list(part.get("remove"))}
         if gone:
@@ -304,11 +325,20 @@ def apply_changes(doc: dict, list_id: str, changes: Any, now: int | None = None)
                 item = norm({**current, **raw}, now)
                 if isinstance(raw.get("notesBase"), str) and isinstance(raw.get("notes"), str):
                     item["notes"] = merge_text(raw["notesBase"], raw["notes"], current["notes"])
+                if key == "todos":
+                    _assign(item, current, user_id)
+                else:
+                    item["from"], item["for"], item["forBy"] = current["from"], current["for"], current["forBy"]
                 items[where[item_id]] = item
         for raw in _list(part.get("add")):
             if not isinstance(raw, dict):
                 continue
             item = norm(raw, now)
+            if key == "todos":
+                _assign(item, None, user_id)
+            else:
+                source = tasks_before.get(item["from"] or item["id"])
+                item["for"], item["forBy"] = (source["for"], source["forBy"]) if source else ("", "")
             if item["id"] in where and items[where[item["id"]]] == item:
                 continue  # sent again after a dropped connection, and already here
             taken = {x["id"] for x in lst["todos"] + lst["done"] + lst["archive"]}
@@ -424,12 +454,14 @@ def repeat_text(rep: dict) -> str:
     return f"Repeats {every}, " + ("counted from when it's done" if rep["from"] == "done" else "on a schedule")
 
 
-def event_text(todo: dict) -> tuple[str, str]:
-    """A task's title and details, as its calendar event shows them."""
+def event_text(todo: dict, names: dict[str, str] | None = None) -> tuple[str, str]:
+    """A task's title and details, as its calendar event shows them. names: each user's name, by id."""
     lines = []
     if todo.get("category"):
         lines.append(f"Category: {todo['category']}")
     lines.append(f"Priority: {PRI_NAMES.get(todo.get('pri'), 'Medium')}")
+    if todo.get("for"):
+        lines.append(f"For: {(names or {}).get(todo['for'], 'someone')}")
     if todo.get("repeat"):
         lines.append(repeat_text(todo["repeat"]))
     if todo.get("status") == "waiting":
@@ -532,3 +564,23 @@ def merge_text(base: str, mine: str, theirs: str) -> str:
             out.append(b[line])
         bi, mi, ti = bj + 1, mj + 1, tj + 1
     return "\n".join(out)
+
+
+# ---------- requests ----------
+
+def request_events(before: dict, lst: dict, user_id: str) -> tuple[list[dict], list[dict]]:
+    """What a change by user_id did with requests, from a snapshot() before it: tasks now for someone else that
+    weren't before ("asked"), and requests someone else made that were just ticked off ("finished"). A task brought
+    back from the log by Undo isn't asked again."""
+    was_for = {x["id"]: x["for"] for x in before["todos"]}
+    was_done = {x["id"]: x["for"] for x in before["done"]}
+    asked = [t for t in lst["todos"] if t["for"] and t["for"] != user_id and was_for.get(t["id"]) != t["for"]
+             and was_done.get(t["id"]) != t["for"]]
+    finished = [e for e in lst["done"] if e["id"] not in was_done and e["forBy"] and e["forBy"] != user_id]
+    return asked, finished
+
+
+def due_text(todo: dict) -> str:
+    """ " (due Fri Nov 13)", or nothing for a task with no due date."""
+    due = parse_date(todo.get("due"))
+    return f" (due {due:%a %b} {due.day})" if due else ""

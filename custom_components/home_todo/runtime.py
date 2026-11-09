@@ -2,15 +2,21 @@
 pushed to every open page that shows them and to the calendars."""
 from __future__ import annotations
 
+import logging
 from collections.abc import Callable
 from typing import Any
 
+import voluptuous as vol
+
 from homeassistant.auth.models import User
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.storage import Store
 
 from . import model
-from .const import SAVE_DELAY, STORAGE_KEY, STORAGE_VERSION
+from .const import PANEL, SAVE_DELAY, STORAGE_KEY, STORAGE_VERSION
+
+_LOGGER = logging.getLogger(__package__)
 
 type Listener = Callable[[dict[str, Any]], None]
 type Watcher = Callable[[set[str], bool], None]  # the lists that changed, and whether calendar settings did
@@ -25,9 +31,11 @@ class HomeTodo:
         self.doc: dict[str, Any] = model.new_doc()
         self._listeners: dict[object, tuple[str, Listener]] = {}
         self._watchers: list[Watcher] = []
+        self.names: dict[str, str] = {}  # everyone with a login, by user id
 
     async def async_load(self) -> None:
         self.doc = model.norm_doc(await self._store.async_load())
+        await self.async_people()
         self.archive_old()
 
     async def async_stop(self) -> None:
@@ -71,8 +79,16 @@ class HomeTodo:
         return [uid for uid, prefs in self.doc["prefs"].items()
                 if prefs.get("cfg", {}).get("calendar") and uid in self.doc["lists"]]
 
+    async def async_people(self) -> list[dict[str, str]]:
+        """Everyone with a Home Assistant login, who a request can be for."""
+        users = await self.hass.auth.async_get_users()
+        people = sorted(({"id": u.id, "name": u.name or "Someone"} for u in users
+                         if u.is_active and not u.system_generated), key=lambda p: p["name"].lower())
+        self.names = {p["id"]: p["name"] for p in people}
+        return people
+
     @callback
-    def everything(self, user: User) -> dict[str, Any]:
+    def everything(self, user: User, people: list[dict[str, str]]) -> dict[str, Any]:
         """All a user's page shows, for when it opens or reconnects."""
         if model.ensure_personal(self.doc, user.id):
             self._changed()
@@ -82,20 +98,47 @@ class HomeTodo:
             "name": self.name,
             "version": self.version,
             "user": {"id": user.id, "name": user.name or "", "is_admin": user.is_admin},
+            "people": people,
             "lists": {lid: model.shown(self.doc["lists"][lid]) for lid in (model.FAMILY, user.id)},
             "prefs": self.doc["prefs"].get(user.id, {}),
         }
 
     @callback
-    def apply(self, list_id: str, changes: dict[str, Any]) -> dict[str, Any]:
+    def apply(self, list_id: str, changes: dict[str, Any], user: User) -> dict[str, Any]:
+        """What a page changed in a list, as user. Anyone a task is newly for is told, and so is whoever asked
+        for one that's been ticked off."""
         if list_id != model.FAMILY:
             model.ensure_personal(self.doc, list_id)
-        before = model.snapshot(self.doc["lists"][list_id])
-        remap = model.apply_changes(self.doc, list_id, changes)
+        lst = self.doc["lists"][list_id]
+        before = model.snapshot(lst)
+        remap = model.apply_changes(self.doc, list_id, changes, user_id=user.id)
         self._changed()
-        self._publish({list_id: model.list_patch(before, self.doc["lists"][list_id])})
+        self._publish({list_id: model.list_patch(before, lst)})
         self._tell({list_id}, calendars=False)
+        asked, finished = model.request_events(before, lst, user.id)
+        who = user.name or "Someone"
+        for task in asked:
+            self._notify(task["for"], f"{who} asked you: {task['text'] or '(untitled)'}{model.due_text(task)}")
+        for entry in finished:
+            self._notify(entry["forBy"], f"{who} finished: {entry['text'] or '(untitled)'}")
         return {"rev": self.doc["rev"], "remap": remap}
+
+    @callback
+    def _notify(self, user_id: str, message: str) -> None:
+        """Tells a person, through where they chose under Settings. Nobody is told if they haven't chosen."""
+        target = self.doc["prefs"].get(user_id, {}).get("cfg", {}).get("notify", "")
+        if target:
+            self.hass.async_create_background_task(self._async_notify(target, message), "home_todo_notify")
+
+    async def _async_notify(self, target: str, message: str) -> None:
+        service = target.partition(".")[2]
+        data: dict[str, Any] = {"title": self.name, "message": message}
+        if service.startswith("mobile_app_"):  # tapping it opens Home To-Do, on iPhone and Android
+            data["data"] = {"url": f"/{PANEL}", "clickAction": f"/{PANEL}"}
+        try:
+            await self.hass.services.async_call("notify", service, data, blocking=True)
+        except (HomeAssistantError, vol.Invalid) as err:
+            _LOGGER.warning("Couldn't send a Home To-Do notification through %s: %s", target, err)
 
     @callback
     def set_prefs(self, user_id: str, prefs: dict[str, Any]) -> dict[str, Any]:
