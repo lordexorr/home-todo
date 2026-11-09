@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "Home To-Do",
-        "description": "Adds the Home To-Do page to the sidebar, for every user."
+        "description": "Adds the Home To-Do page to the sidebar, for every user.\n\nRemoving Home To-Do later keeps every list in `.storage/home_todo`, so adding it again brings them back."
       }
     },
     "abort": {

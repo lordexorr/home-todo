@@ -11,19 +11,27 @@ from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.typing import ConfigType
 from homeassistant.loader import async_get_integration
 
+from . import websocket
 from .const import DOMAIN, PANEL, STATIC_URL
+from .runtime import HomeTodo
 
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 FRONTEND_DIR = Path(__file__).parent / "frontend"
 
+type HomeTodoConfigEntry = ConfigEntry[HomeTodo]
+
 
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
-    """The page's files, served for as long as Home Assistant runs."""
+    """What stays for as long as Home Assistant runs: the page's commands and files."""
+    websocket.async_register(hass)
     await hass.http.async_register_static_paths([StaticPathConfig(STATIC_URL, str(FRONTEND_DIR), cache_headers=False)])
     return True
 
 
-async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+async def async_setup_entry(hass: HomeAssistant, entry: HomeTodoConfigEntry) -> bool:
+    todo = HomeTodo(hass)
+    await todo.async_load()
+    entry.runtime_data = todo
     version = str((await async_get_integration(hass, DOMAIN)).version)
     # The page runs in a frame of its own, so its styles and keyboard shortcuts stay apart from Home Assistant's.
     # The version in its address makes browsers fetch it afresh after an update.
@@ -36,5 +44,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     return True
 
 
-async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+async def async_unload_entry(hass: HomeAssistant, entry: HomeTodoConfigEntry) -> bool:
+    await entry.runtime_data.async_stop()
     return True

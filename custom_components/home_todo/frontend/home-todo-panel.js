@@ -47,6 +47,7 @@ class HomeTodoPanel extends HTMLElement {
       else this.appendChild(document.importNode(node, true));
     }
     this._addMenu();
+    window.homeTodoHost = this; // the page reaches Home Assistant's connection through this.hass
     for (const node of scripts) runScript(node, this);
   }
 

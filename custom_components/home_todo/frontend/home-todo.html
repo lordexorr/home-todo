@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="slate">
+<html lang="en" data-theme="slate" data-loading>
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -191,6 +191,18 @@
   .menu .note b{ color:var(--ink-3); font-weight:600; }
   .menu .ico{ width:15px; text-align:center; color:var(--ink-4); flex:0 0 auto; font-size:12px; }
   .menu button:hover .ico{ color:var(--accent); }
+
+  /* list switcher */
+  .seg.lists{ flex:0 0 auto; }
+  .seg.lists button{ padding:5px 13px; font-size:12.5px; }
+
+  /* connection to Home Assistant: covers the page while it loads, and blocks edits while disconnected */
+  .connbox{ position:fixed; inset:0; z-index:700; display:flex; align-items:center; justify-content:center;
+    background:var(--backdrop); backdrop-filter:blur(3px); }
+  html[data-loading] .connbox{ background:var(--bg); backdrop-filter:none; }
+  .conncard{ display:flex; align-items:center; gap:10px; max-width:min(440px,calc(100% - 32px));
+    background:var(--panel-2); border:1px solid var(--line-2); border-radius:11px; padding:13px 17px;
+    font-size:13px; color:var(--ink-2); box-shadow:var(--shadow-2); }
 
   /* ================= layout grid ================= */
   .grid{ flex:1; min-height:0; display:grid; padding:12px; grid-template-columns:1fr 10px 1.55fr 10px 1fr; }
@@ -570,13 +582,6 @@
     *{ animation-duration:.01ms !important; transition-duration:.01ms !important; }
   }
 </style>
-<script>
-  // The markup ships data-theme="slate". This only runs to honour a different saved choice,
-  // before the body paints, so switching themes never flashes.
-  (function(){ try{ var t = localStorage.getItem("hometodo_theme");
-    if(t === "dark") document.documentElement.removeAttribute("data-theme");
-    else if(t === "dim") document.documentElement.setAttribute("data-theme", "dim"); }catch(e){} })();
-</script>
 </head>
 <body>
 
@@ -589,6 +594,10 @@
       <defs><linearGradient id="bg1" x1="0" y1="0" x2="28" y2="28"><stop class="bs1"/><stop class="bs2" offset="1"/></linearGradient></defs>
     </svg>
     <div class="nm"><b>Home To-Do</b></div>
+  </div>
+
+  <div class="seg lists" id="listSeg" role="group" aria-label="List">
+    <button type="button" data-list="mine" id="listMine">Mine</button><button type="button" data-list="family">Family</button>
   </div>
 
   <div class="metrics">
@@ -608,22 +617,14 @@
     <button class="themebtn" id="themeBtn" title="Theme"></button>
     <div class="session" id="session">
       <button class="spill" id="sessionBtn" aria-haspopup="true" aria-expanded="false">
-        <span class="dot" id="fileDot"></span>
-        <span class="fn" id="fileName">No file linked</span>
+        <span class="dot" id="syncDot"></span>
+        <span class="fn" id="syncTxt">Connecting</span>
         <span class="caret">▼</span>
       </button>
       <div class="menu" id="sessionMenu" role="menu">
-        <button id="mLink"><span class="ico">⛓</span><span class="lbl">Link a session file…</span><span class="k" id="mLinkHint">auto-save</span></button>
-        <button id="mSaveNow" disabled><span class="ico">↓</span>Save to file now<span class="k">Ctrl S</span></button>
-        <button id="mOpen"><span class="ico">↥</span>Open a session file…</button>
-        <button id="mUnlink" disabled><span class="ico">⊘</span>Unlink file</button>
-        <hr>
-        <button id="mDownload"><span class="ico">⬇</span>Download a backup copy</button>
-        <button id="mImport"><span class="ico">⬆</span>Import from backup…</button>
         <button id="mExportTxt"><span class="ico">≡</span>Export timesheet (.txt)</button>
-        <hr>
         <button id="mSettings"><span class="ico">⚙</span>Settings…</button>
-        <div class="note" id="fsNote"></div>
+        <div class="note">Saved in Home Assistant as you go. Every device you sign in on shows the same lists.</div>
       </div>
     </div>
     <div class="clock"><div class="t" id="clock">--:--</div><div class="d" id="today">—</div></div>
@@ -786,7 +787,7 @@
 </footer>
 
 <div class="toasts" id="toasts"></div>
-<input type="file" id="filePick" accept=".json,application/json" hidden>
+<div class="connbox" id="connBox"><div class="conncard"><span class="dot warn"></span><span id="connTxt">Connecting to Home Assistant…</span></div></div>
 
 <!-- subnet calculator -->
 <div class="modal" id="calcModal">
@@ -798,21 +799,6 @@
         <button class="btn" id="calcGo">Calculate</button>
       </div>
       <div id="calcOut"></div>
-    </div>
-  </div>
-</div>
-
-<!-- import choice -->
-<div class="modal" id="importModal">
-  <div class="mcard">
-    <div class="mhead"><h3>Import session</h3><button class="x" data-close="importModal">✕</button></div>
-    <div class="mbody">
-      <div class="summary" id="importSummary"></div>
-      <div class="choices">
-        <button class="choice" id="impReplace"><span class="ci">⤿</span><span><b>Replace everything</b><span>Discard what is on screen now and load the file as the whole session.</span></span></button>
-        <button class="choice" id="impMerge"><span class="ci">⊕</span><span><b>Merge into this session</b><span>Keep current work and append the file's tasks, log entries and categories. Notes are joined with a divider.</span></span></button>
-        <button class="choice" id="impCancel"><span class="ci">⨯</span><span><b>Cancel</b><span>Leave this session untouched.</span></span></button>
-      </div>
     </div>
   </div>
 </div>
@@ -870,9 +856,14 @@
         <span class="c">sub &lt;#&gt; &lt;text&gt;</span><span class="d">Add a side task under a task. <code>step</code> works too.</span>
         <span class="c">note &lt;text&gt;</span><span class="d">Append a line to whichever notes are open — the selected task, or the scratchpad.</span>
         <span class="c">calc &lt;subnet&gt;</span><span class="d">Subnet math for IPv4 or IPv6. <code>calc 10.42.16.0/22</code>, <code>calc 192.168.1.10 255.255.255.0</code>.</span>
-        <span class="c">save</span><span class="d">Write to the linked session file right now.</span>
         <span class="c">find &lt;text&gt;</span><span class="d">Filter tasks and the log. Run <code>find</code> with nothing to clear it.</span>
         <span class="c">help</span><span class="d">Open this reference. <code>?</code></span>
+      </div>
+      <div class="msub">Lists</div>
+      <div class="mnote" style="margin-top:0;padding-top:0;border:0">
+        <b>Mine</b> is your own list, and only you see it. <b>Family</b> is shared: everyone who uses Home To-Do
+        sees it and can change it. Switch between them with the buttons beside the logo. Each list has its own
+        tasks, log and scratchpad, and its own task numbers; categories are shared by both.
       </div>
       <div class="msub">Side tasks</div>
       <div class="mnote" style="margin-top:0;padding-top:0;border:0">
@@ -883,7 +874,7 @@
       </div>
       <div class="msub">Top bar shortcuts</div>
       <div class="mnote" style="margin-top:0;padding-top:0;border:0">
-        Shortcut links appear beside the clock once you add some under Session → Settings. A path starting
+        Shortcut links appear in the top bar once you add some under Settings, in the menu beside the clock. A path starting
         with <code>/</code> is appended to the ServiceNow instance address you set there; a full <code>https://</code>
         address is used as written.
       </div>
@@ -891,7 +882,7 @@
       <div class="mnote" style="margin-top:0;padding-top:0;border:0">
         The Ticket box on a task or log entry is optional. It follows a task into the completed log and
         appears in the timesheet export after the category — <code>-Category INC0012345 replaced SFP</code>.
-        To make ticket numbers clickable, set your ServiceNow instance under Session → Settings.
+        To make ticket numbers clickable, set your ServiceNow instance under Settings, in the menu beside the clock.
       </div>
       <div class="msub">Categories</div>
       <div class="mnote" style="margin-top:0;padding-top:0;border:0">
@@ -911,15 +902,14 @@
       <div class="msub">Keyboard</div>
       <div class="cmdref">
         <span class="c">Ctrl K</span><span class="d">Jump to the command bar.</span>
-        <span class="c">Ctrl S</span><span class="d">Save to the linked session file.</span>
         <span class="c">Ctrl /</span><span class="d">Subnet calculator.</span>
         <span class="c">Esc</span><span class="d">Close a dialog, or deselect the open task.</span>
-        <span class="c">Theme</span><span class="d">The button left of the file pill cycles Slate → Dim → Dark. It travels with the session.</span>
+        <span class="c">Theme</span><span class="d">The button left of the status pill cycles Slate → Dim → Dark. It's saved for you, on every device.</span>
         <span class="c">Double-click</span><span class="d">Rename a task or log entry in place.</span>
       </div>
       <div class="mnote">
         <b>Notes follow the selection.</b> Click any task to open its own notes in the right panel; the detail bar above them edits due date, priority, category and waiting status. Close the task tab to return to the shared scratchpad. Notes stay attached when a task is completed.<br>
-        <b>Nothing leaves this machine.</b> No network calls, no fonts, no analytics. Your data lives in this browser's storage and, once linked, in a JSON file you choose.
+        <b>Everything is saved in Home Assistant</b> as you go, so every device you sign in on shows the same lists. The pill beside the clock says <b>Saved</b> once Home Assistant has it.
       </div>
     </div>
   </div>
@@ -931,26 +921,11 @@
 
   var $ = function(id){ return document.getElementById(id); };
   var DEFAULT_SNOW = "";
-  var LS = "hometodo_v2";
-  var LEGACY = { todos:"hometodo_todos", done:"hometodo_done", categories:"hometodo_clients", notes:"hometodo_notes", seq:"hometodo_seq" };
-
-  /* ============ storage ============ */
-  var store = (function(){
-    var mem = {}, ok = false;
-    try{ localStorage.setItem("__o","1"); localStorage.removeItem("__o"); ok = true; }catch(e){}
-    return {
-      ok: ok,
-      get: function(k){ try{ return ok ? localStorage.getItem(k) : (k in mem ? mem[k] : null); }catch(e){ return (k in mem) ? mem[k] : null; } },
-      set: function(k,v){ try{ ok ? localStorage.setItem(k,v) : (mem[k]=v); }catch(e){ mem[k]=v; } },
-      del: function(k){ try{ ok ? localStorage.removeItem(k) : (delete mem[k]); }catch(e){} }
-    };
-  })();
-
   /* ============ state ============ */
   var S = {
     seq: 1, todos: [], done: [], categories: [], notes: "",
-    cfg: { snow: DEFAULT_SNOW, links: null },
-    ui: { cols:[1.2,1.5,1], collapsed:[false,false,false], sort:"manual", showTime:true, theme:"slate", themePick:false }
+    cfg: { snow: DEFAULT_SNOW, links: [] },
+    ui: defaultUi()
   };
 
   function normTodo(t){
@@ -999,8 +974,7 @@
     var seen = {}, next = 1, out = [];
     v.forEach(function(x){
       if(!x || typeof x !== "object") return;
-      var text = String(x.text == null ? "" : x.text).trim();
-      if(!text) return;
+      var text = String(x.text == null ? "" : x.text);   // as typed: an empty one stays while it's retyped
       var id = parseInt(x.id, 10);
       if(!id || id < 1 || seen[id]) id = 0;          // missing or already taken
       out.push({ id:id, text:text, done:!!x.done, notes:String(x.notes == null ? "" : x.notes) });
@@ -1030,343 +1004,308 @@
   function normTicket(v){ return String(v == null ? "" : v).trim().toUpperCase().replace(/\s+/g, ""); }
   function isDate(v){ return typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v); }
 
-  function adopt(data){
-    if(!data || typeof data !== "object") return false;
-    S.todos   = (Array.isArray(data.todos)   ? data.todos   : []).map(normTodo);
-    S.done    = (Array.isArray(data.done)    ? data.done    : []).map(normDone);
-    // Sessions saved before the rename called these "clients"; keep reading them.
-    S.categories = (Array.isArray(data.categories) ? data.categories : (Array.isArray(data.clients) ? data.clients : [])).filter(function(c){ return typeof c === "string" && c; });
-    S.notes   = typeof data.notes === "string" ? data.notes : "";
-    var inCfg = (data.cfg && typeof data.cfg === "object") ? data.cfg : {};
-    S.cfg.snow = typeof inCfg.snow === "string" ? inCfg.snow.trim() : DEFAULT_SNOW;
-    // An absent links field means "use the defaults"; an empty array means the user cleared them.
-    S.cfg.links = Array.isArray(inCfg.links)
-      ? inCfg.links
-          .filter(function(l){ return l && typeof l.label === "string" && typeof l.path === "string"; })
-          .map(function(l){ return { label:l.label.trim(), path:l.path.trim() }; })
-          .filter(function(l){ return l.label && l.path; })
-      : defaultLinks();
-    var maxId = 0;
+  function defaultUi(){
+    return { cols:[1.2,1.5,1], collapsed:[false,false,false], sort:"manual", showTime:true, theme:"slate", themePick:false, list:"mine" };
+  }
+  // A user's display settings and links, as Home Assistant keeps them. Anything missing takes its default.
+  function adoptPrefs(p){
+    p = (p && typeof p === "object") ? p : {};
+    var ui = (p.ui && typeof p.ui === "object") ? p.ui : {}, cfg = (p.cfg && typeof p.cfg === "object") ? p.cfg : {};
+    var out = defaultUi();
+    if(Array.isArray(ui.cols) && ui.cols.length === 3 && ui.cols.every(function(n){ return typeof n === "number" && isFinite(n) && n > 0; })) out.cols = ui.cols.slice();
+    if(Array.isArray(ui.collapsed) && ui.collapsed.length === 3) out.collapsed = ui.collapsed.map(Boolean);
+    if(["manual","due","pri","age"].indexOf(ui.sort) >= 0) out.sort = ui.sort;
+    if(typeof ui.showTime === "boolean") out.showTime = ui.showTime;
+    // Only honour a theme the user actually chose; otherwise take the current default.
+    if(THEMES.indexOf(ui.theme) >= 0 && ui.themePick === true){ out.theme = ui.theme; out.themePick = true; }
+    if(ui.list === "mine" || ui.list === "family") out.list = ui.list;
+    S.ui = out;
+    S.cfg = {
+      snow: typeof cfg.snow === "string" ? cfg.snow.trim() : DEFAULT_SNOW,
+      // An absent links field means "use the defaults"; an empty array means the user cleared them.
+      links: Array.isArray(cfg.links)
+        ? cfg.links.filter(function(l){ return l && typeof l.label === "string" && typeof l.path === "string"; })
+            .map(function(l){ return { label:l.label.trim(), path:l.path.trim() }; })
+            .filter(function(l){ return l.label && l.path; })
+        : defaultLinks()
+    };
+  }
+
+  /* ============ Home Assistant ============ */
+  // Everything is kept in Home Assistant. The page works on a copy of the list on screen and, after each edit,
+  // sends what changed, task by task. Home Assistant sends every change, from this page or any other, to each
+  // page showing that list.
+  var HOST = window.homeTodoHost || null;
+  var conn = null, unsub = null, me = null, listening = false;
+  var booted = false, online = false, failed = false, inflight = 0, latest = null, connMsg = "", leaving = false;
+  var active = "";                                  // id of the list on screen
+  var sent = { decks:{}, cats:[], prefs:"" };       // what this page has sent: edits are measured from here
+  var acked = { decks:{}, cats:[], prefs:"" };      // what Home Assistant has confirmed it has
+  var ERR_CONNECTION_LOST = 3;                      // home-assistant-js-websocket's code for a dropped connection
+
+  function clone(v){ return JSON.parse(JSON.stringify(v)); }
+  function normDeck(d){
+    d = (d && typeof d === "object") ? d : {};
+    return {
+      id: String(d.id || ""),
+      seq: +d.seq || 1,
+      todos: (Array.isArray(d.todos) ? d.todos : []).map(normTodo),
+      done: (Array.isArray(d.done) ? d.done : []).map(normDone),
+      notes: typeof d.notes === "string" ? d.notes : ""
+    };
+  }
+  function listId(kind){ return kind === "family" ? "family" : (me ? me.id : ""); }
+  function deckNow(){ return { id:active, seq:S.seq, todos:clone(S.todos), done:clone(S.done), notes:S.notes }; }
+  // keep: the same list again, from Home Assistant. Its tasks are updated in place, so anything still holding one,
+  // such as an Undo, keeps working.
+  function loadActive(keep){
+    var d = sent.decks[active], maxId = 0;
+    S.todos = keep ? reuse(S.todos, clone(d.todos)) : clone(d.todos);
+    S.done = keep ? reuse(S.done, clone(d.done)) : clone(d.done);
+    S.notes = d.notes;
     S.todos.concat(S.done).forEach(function(x){ if(x.id > maxId) maxId = x.id; });
-    S.seq = Math.max(+data.seq || 1, maxId + 1);
-    if(data.ui && typeof data.ui === "object"){
-      if(Array.isArray(data.ui.cols) && data.ui.cols.length === 3 && data.ui.cols.every(function(n){ return typeof n === "number" && isFinite(n) && n > 0; })){
-        // A session still sitting on the old default was never dragged, so move it
-        // to the new one. Anything you have resized yourself is left alone.
-        var untouched = data.ui.cols[0] === 1 && data.ui.cols[1] === 1.55 && data.ui.cols[2] === 1;
-        S.ui.cols = untouched ? [1.2,1.5,1] : data.ui.cols.slice();
-      }
-      if(Array.isArray(data.ui.collapsed) && data.ui.collapsed.length === 3) S.ui.collapsed = data.ui.collapsed.map(Boolean);
-      if(["manual","due","pri","age"].indexOf(data.ui.sort) >= 0) S.ui.sort = data.ui.sort;
-      if(typeof data.ui.showTime === "boolean") S.ui.showTime = data.ui.showTime;
-      // Only honour a theme the user actually chose; otherwise take the current default.
-      if(THEMES.indexOf(data.ui.theme) >= 0 && data.ui.themePick === true){
-        S.ui.theme = data.ui.theme; S.ui.themePick = true;
-      }
-    }
-    return true;
+    S.seq = Math.max(d.seq, maxId + 1);
   }
-  function snapshot(){
-    return { seq:S.seq, todos:S.todos, done:S.done, categories:S.categories, notes:S.notes, cfg:S.cfg, ui:S.ui };
-  }
-  function loadLocal(){
-    var raw = store.get(LS);
-    if(raw){ try{ if(adopt(JSON.parse(raw))) return true; }catch(e){} }
-    // migrate a v1 session if one is present
-    try{
-      var t = store.get(LEGACY.todos);
-      if(t){
-        adopt({
-          todos: JSON.parse(t||"[]"),
-          done: JSON.parse(store.get(LEGACY.done)||"[]"),
-          categories: JSON.parse(store.get(LEGACY.categories)||"[]"),
-          notes: store.get(LEGACY.notes)||"",
-          seq: parseInt(store.get(LEGACY.seq)||"1",10)||1
-        });
-        return true;
-      }
-    }catch(e){}
-    return false;
-  }
-  var saveTimer = null;
-  function save(){
-    try{ store.set(LS, JSON.stringify(snapshot())); }catch(e){}
-    queueFileWrite();
-  }
-
-  /* ============ file system access ============ */
-  var FS = {
-    supported: (typeof window !== "undefined") && !!window.showSaveFilePicker && !!window.showOpenFilePicker,
-    handle: null,
-    granted: false,
-    name: "",
-    dirty: false,
-    writing: false,
-    lastWrite: 0,
-    idb: null,
-    idbOK: null
-  };
-
-  function idb(){
-    if(FS.idb) return FS.idb;
-    FS.idb = new Promise(function(res){
-      var req;
-      try{ req = indexedDB.open("hometodo-fs", 1); }
-      catch(e){ FS.idbOK = false; return res(null); }
-      req.onupgradeneeded = function(){ req.result.createObjectStore("kv"); };
-      req.onsuccess = function(){ FS.idbOK = true; res(req.result); };
-      req.onerror = function(){ FS.idbOK = false; res(null); };
-      req.onblocked = function(){ FS.idbOK = false; res(null); };
-      setTimeout(function(){ if(FS.idbOK === null){ FS.idbOK = false; res(null); } }, 2500);
+  function reuse(cur, fresh){
+    var had = {};
+    cur.forEach(function(x){ had[x.id] = x; });
+    return fresh.map(function(x){
+      var o = had[x.id];
+      if(!o) return x;
+      Object.keys(o).forEach(function(k){ if(!(k in x)) delete o[k]; });
+      Object.keys(x).forEach(function(k){ o[k] = x[k]; });
+      return o;
     });
-    return FS.idb;
-  }
-  function idbPut(key, val){
-    return idb().then(function(db){
-      if(!db) return false;
-      return new Promise(function(res){
-        try{
-          var tx = db.transaction("kv","readwrite");
-          tx.objectStore("kv").put(val, key);
-          tx.oncomplete = function(){ res(true); };
-          tx.onerror = function(){ res(false); };
-        }catch(e){ res(false); }
-      });
-    }).catch(function(){ return false; });
-  }
-  function idbGet(key){
-    return idb().then(function(db){
-      if(!db) return null;
-      return new Promise(function(res){
-        try{
-          var tx = db.transaction("kv","readonly"), rq = tx.objectStore("kv").get(key);
-          rq.onsuccess = function(){ res(rq.result || null); };
-          rq.onerror = function(){ res(null); };
-        }catch(e){ res(null); }
-      });
-    }).catch(function(){ return null; });
-  }
-  function idbDel(key){
-    return idb().then(function(db){
-      if(!db) return false;
-      return new Promise(function(res){
-        try{
-          var tx = db.transaction("kv","readwrite");
-          tx.objectStore("kv").delete(key);
-          tx.oncomplete = function(){ res(true); };
-          tx.onerror = function(){ res(false); };
-        }catch(e){ res(false); }
-      });
-    }).catch(function(){ return false; });
   }
 
-  function fileBlob(){
-    return JSON.stringify({
-      app: "hometodo",
-      version: 2,
-      savedAt: new Date().toISOString(),
-      data: snapshot()
-    }, null, 2);
+  // What changed in the list on screen since it was last sent, item by item.
+  function diffItems(cur, old){
+    var om = {}, cm = {}, out = { add:[], update:[], remove:[] };
+    old.forEach(function(x){ om[x.id] = x; });
+    cur.forEach(function(x){ cm[x.id] = x; });
+    cur.forEach(function(x){
+      if(!om[x.id]) out.add.push(x);
+      else if(JSON.stringify(x) !== JSON.stringify(om[x.id])) out.update.push(x);
+    });
+    old.forEach(function(x){ if(!cm[x.id]) out.remove.push(x.id); });
+    var a = cur.filter(function(x){ return om[x.id]; }).map(function(x){ return x.id; }).join(",");
+    var b = old.filter(function(x){ return cm[x.id]; }).map(function(x){ return x.id; }).join(",");
+    if(out.add.length || a !== b) out.order = cur.map(function(x){ return x.id; });
+    return (out.add.length || out.update.length || out.remove.length || out.order) ? out : null;
   }
+  function listChanges(){
+    var d = sent.decks[active];
+    if(!d) return null;
+    var ch = {}, any = false, t = diffItems(S.todos, d.todos), e = diffItems(S.done, d.done);
+    if(t){ ch.todos = t; any = true; }
+    if(e){ ch.done = e; any = true; }
+    if(S.notes !== d.notes){ ch.notes = S.notes; any = true; }
+    var add = S.categories.filter(function(c){ return sent.cats.indexOf(c) < 0; });
+    var rem = sent.cats.filter(function(c){ return S.categories.indexOf(c) < 0; });
+    if(add.length || rem.length){ ch.categories = { add:add, remove:rem }; any = true; }
+    return any ? ch : null;
+  }
+  function prefsNow(){ return JSON.stringify({ ui:S.ui, cfg:S.cfg }); }
+  function hasPending(){ return booted && (!!listChanges() || prefsNow() !== sent.prefs); }
 
-  function setFileUI(){
-    var dot = $("fileDot"), nm = $("fileName");
+  // Sends whatever changed since the last send. Every edit ends here. While disconnected, edits wait and go
+  // once the connection is back.
+  function save(){
+    if(!booted || !online){ setSyncUI(); return; }
+    var ch = listChanges();
+    if(ch){
+      var deck = deckNow(), cats = S.categories.slice(), id = active;
+      sent.decks[id] = deck; sent.cats = cats;
+      send({ type:"home_todo/apply", list_id:id, changes:ch }, function(res){
+        acked.decks[id] = deck; acked.cats = cats;
+        if(res && res.remap) remapIds(id, res.remap);
+      });
+    }
+    var p = prefsNow();
+    if(p !== sent.prefs){
+      sent.prefs = p;
+      send({ type:"home_todo/prefs", prefs:JSON.parse(p) }, function(){ acked.prefs = p; });
+    }
+    setSyncUI();
+  }
+  function send(msg, onSaved){
+    inflight++;
+    conn.sendMessagePromise(msg).then(function(res){
+      inflight--;
+      onSaved(res);
+      settle();
+    }, function(err){
+      inflight--;
+      if(err && err.code === ERR_CONNECTION_LOST){
+        // Home Assistant may not have it, so everything it hasn't confirmed goes again once reconnected.
+        online = false;
+        sent = clone(acked);
+      } else {
+        failed = true;
+        toast("Home Assistant didn't save that — " + ((err && err.message) || "error"), "err");
+      }
+      settle();
+    });
+  }
+  // Two pages added a task with the same number at once, and Home Assistant gave this one the list's next number.
+  function remapIds(id, remap){
+    ["todos","done"].forEach(function(key){
+      var m = remap[key] || {};
+      Object.keys(m).forEach(function(from){
+        var a = +from, b = +m[from];
+        var arrays = [sent.decks[id] && sent.decks[id][key], acked.decks[id] && acked.decks[id][key]];
+        if(id === active) arrays.push(S[key]);
+        arrays.forEach(function(arr){ (arr || []).forEach(function(x){ if(x.id === a) x.id = b; }); });
+        if(id === active){
+          S.seq = Math.max(S.seq, b + 1);
+          if(selected && selected.id === a) selected = { type:selected.type, id:b };
+          if(editing && editing.id === a) editing = { type:editing.type, id:b };
+        }
+        toast("#" + a + " is now #" + b + " — another page added a #" + a + " at the same moment", "info");
+      });
+    });
+  }
+  // Once nothing is on its way: send any edits made meanwhile, or else take what Home Assistant last sent.
+  function settle(){
+    if(inflight > 0){ setSyncUI(); return; }
+    if(failed){ failed = false; latest = null; resync(); return; }
+    if(online && hasPending()){ save(); return; }
+    if(latest && online){ var ev = latest; latest = null; takeServer(ev); }
+    setSyncUI();
+  }
+  function onEvent(ev){
+    if(!ev || typeof ev !== "object") return;
+    if(ev.closed){ online = false; latest = null; setSyncUI(); setTimeout(resync, 2000); return; }
+    if(ev.initial){
+      me = ev.user || me;
+      connMsg = "";
+      if(!booted){ start(ev); return; }
+      online = true;
+    }
+    latest = mergeEvents(latest, ev);
+    settle();
+  }
+  function mergeEvents(a, b){
+    if(!a) return b;
+    var out = { lists:{}, categories: b.categories || a.categories, prefs: b.prefs || a.prefs };
+    Object.keys(a.lists || {}).forEach(function(k){ out.lists[k] = a.lists[k]; });
+    Object.keys(b.lists || {}).forEach(function(k){ out.lists[k] = b.lists[k]; });
+    return out;
+  }
+  function notesSig(){ return selected ? JSON.stringify(selectedItem() || null) : "scratch:" + S.notes; }
+  // Takes Home Assistant's version of everything in ev, and redraws only what changed.
+  function takeServer(ev){
+    var lists = ev.lists || {}, sig = notesSig();
+    var before = JSON.stringify([S.todos, S.done, S.notes, S.categories]);
+    Object.keys(lists).forEach(function(id){
+      var d = normDeck(lists[id]);
+      sent.decks[id] = d; acked.decks[id] = clone(d);
+      if(id === active) loadActive(true);
+    });
+    if(Array.isArray(ev.categories)){
+      var cats = ev.categories.filter(function(c){ return typeof c === "string" && c; });
+      S.categories = cats.slice(); sent.cats = cats.slice(); acked.cats = cats.slice();
+    }
+    if(ev.prefs){
+      var was = prefsNow();
+      adoptPrefs(ev.prefs);
+      sent.prefs = acked.prefs = prefsNow();
+      if(sent.prefs !== was) applyUi();
+    }
+    if(JSON.stringify([S.todos, S.done, S.notes, S.categories]) !== before){
+      if(!editing && !isDragging){ renderTodos(); renderLog(); }
+      renderMetrics(); renderPops();
+      if(notesSig() !== sig) renderNotes();
+    }
+  }
+  function start(ev){
+    Object.keys(ev.lists || {}).forEach(function(id){
+      var d = normDeck(ev.lists[id]);
+      sent.decks[id] = d; acked.decks[id] = clone(d);
+    });
+    var cats = (Array.isArray(ev.categories) ? ev.categories : []).filter(function(c){ return typeof c === "string" && c; });
+    S.categories = cats.slice(); sent.cats = cats.slice(); acked.cats = cats.slice();
+    adoptPrefs(ev.prefs);
+    sent.prefs = acked.prefs = prefsNow();
+    active = listId(S.ui.list);
+    if(!sent.decks[active]) active = "family";
+    loadActive();
+    booted = true; online = true;
+    applyUi(); renderListSeg(); syncAll();
+    document.documentElement.removeAttribute("data-loading");
+    setSyncUI();
+  }
+  function applyUi(){
+    applyTheme(); applyLayout(); renderLinks();
+    $("sortSel").value = S.ui.sort;
+    $("timeToggle").checked = S.ui.showTime;
+    $("logList").classList.toggle("notime", !S.ui.showTime);
+    if(!editing && !isDragging) syncLists();
+  }
+  function switchList(kind){
+    var id = listId(kind);
+    if(!booted || !online || id === active || !sent.decks[id]) return;
+    save();                                   // anything still waiting on this list goes first
+    active = id; S.ui.list = kind;
+    selected = null; editing = null;
+    $("toasts").textContent = "";             // an Undo for the other list mustn't act on this one
+    loadActive();
+    save();                                   // remembers which list was open
+    renderListSeg(); syncAll();
+  }
+  function renderListSeg(){
+    var kind = active === "family" ? "family" : "mine";
+    Array.prototype.forEach.call(document.querySelectorAll("#listSeg button"), function(b){
+      b.classList.toggle("on", b.getAttribute("data-list") === kind);
+    });
+    $("listMine").title = me && me.name ? me.name + "'s own list" : "Your own list";
+  }
+  function onDisconnected(){ online = false; setSyncUI(); }
+  function connect(){
+    leaving = false;
+    conn = HOST && HOST.hass && HOST.hass.connection;
+    if(!conn){ connMsg = "Open Home To-Do from Home Assistant's sidebar."; setSyncUI(); return; }
+    if(!listening){ listening = true; conn.addEventListener("disconnected", onDisconnected); }
+    subscribe();
+  }
+  // Home Assistant's connection subscribes again by itself after a reconnect, and the page is sent everything.
+  function subscribe(){
+    if(leaving) return;
+    conn.subscribeMessage(onEvent, { type:"home_todo/subscribe" }).then(function(u){
+      if(leaving) dropSub(u); else unsub = u;
+    }, function(err){
+      connMsg = err && (err.code === "not_loaded" || err.code === "unknown_command")
+        ? "Home To-Do isn't set up in Home Assistant. Add it under Settings → Devices & services."
+        : "Couldn't reach Home To-Do in Home Assistant. Trying again…";
+      setSyncUI();
+      setTimeout(subscribe, 5000);
+    });
+  }
+  function dropSub(u){ if(u){ try{ u().catch(function(){}); }catch(e){} } }
+  function resync(){
+    var u = unsub; unsub = null;
+    dropSub(u);
+    subscribe();
+  }
+  // Home Assistant removes this page's frame on leaving it for another page in the sidebar. The connection
+  // belongs to Home Assistant and outlives the frame, so the page takes its subscription and listener off it.
+  function disconnect(){
+    leaving = true;
+    var u = unsub; unsub = null;
+    dropSub(u);
+    if(conn && listening){ conn.removeEventListener("disconnected", onDisconnected); listening = false; }
+  }
+  function setSyncUI(){
+    var dot = $("syncDot"), txt = $("syncTxt");
     if(!dot) return;
     dot.className = "dot";
-    if(FS.writing){ dot.classList.add("busy"); nm.textContent = FS.name; }
-    else if(FS.handle && FS.granted){ dot.classList.add("live"); nm.textContent = FS.name; }
-    else if(FS.handle){ dot.classList.add("warn"); nm.textContent = FS.name + " — reconnect"; }
-    else { nm.textContent = "No file linked"; }
-    var needsReconnect = !!(FS.handle && !FS.granted);
-    $("mLink").querySelector(".lbl").textContent = needsReconnect ? "Reconnect " + FS.name : "Link a session file…";
-    $("mLinkHint").textContent = needsReconnect ? "denied" : "auto-save";
-    $("mSaveNow").disabled = !FS.handle;
-    $("mUnlink").disabled = !FS.handle;
-    var pill = $("sessionBtn");
-    pill.title = FS.handle
-      ? (FS.granted ? "Auto-saving to " + FS.name + (FS.lastWrite ? " · last write " + fmtTime(FS.lastWrite) : "") : "Click to reconnect " + FS.name)
-      : "Link a file so your session survives a cleared cache";
-  }
-
-  function queueFileWrite(){
-    if(!FS.handle || !FS.granted) return;
-    FS.dirty = true;
-    clearTimeout(saveTimer);
-    saveTimer = setTimeout(writeFile, 1200);
-  }
-
-  function writeFile(silent){
-    if(!FS.handle || !FS.granted) return Promise.resolve(false);
-    if(FS.writing){
-      // a write is already in flight — come back for whatever changed since
-      clearTimeout(saveTimer);
-      saveTimer = setTimeout(function(){ writeFile(true); }, 400);
-      return Promise.resolve(false);
-    }
-    FS.writing = true; FS.dirty = false; setFileUI();
-    return FS.handle.createWritable().then(function(w){
-      return w.write(fileBlob()).then(function(){ return w.close(); });
-    }).then(function(){
-      FS.writing = false; FS.lastWrite = Date.now(); setFileUI();
-      if(FS.dirty) queueFileWrite();
-      if(!silent) toast("Saved to " + FS.name, "ok");
-      return true;
-    }).catch(function(err){
-      FS.writing = false; FS.dirty = true; setFileUI();
-      toast("Could not write " + FS.name + " — " + (err && err.name ? err.name : "error"), "err");
-      return false;
-    });
-  }
-
-  function askPermission(handle, mode){
-    if(!handle || !handle.queryPermission) return Promise.resolve(true);
-    var opts = { mode: mode || "readwrite" };
-    return handle.queryPermission(opts).then(function(st){
-      if(st === "granted") return true;
-      return handle.requestPermission(opts).then(function(s2){ return s2 === "granted"; });
-    }).catch(function(){ return false; });
-  }
-
-  function linkFile(){
-    if(!FS.supported){ toast("This browser has no file access API — use Download a backup copy instead", "warn"); return; }
-    window.showSaveFilePicker({
-      suggestedName: "hometodo-session.json",
-      types: [{ description: "Home To-Do session", accept: { "application/json": [".json"] } }]
-    }).then(function(h){
-      FS.handle = h; FS.name = h.name; FS.granted = true;
-      return idbPut("handle", h).then(function(persisted){
-        setFileUI();
-        return writeFile(true).then(function(){
-          toast("Linked to " + FS.name + " — saving automatically", "ok");
-          if(!persisted) toast("This browser will not remember the link after a reload", "warn");
-        });
-      });
-    }).catch(function(err){ if(err && err.name !== "AbortError") toast("Could not link a file — " + err.name, "err"); });
-  }
-
-  function openFile(){
-    if(!FS.supported){ $("filePick").click(); return; }
-    window.showOpenFilePicker({
-      types: [{ description: "Home To-Do session", accept: { "application/json": [".json"] } }],
-      multiple: false
-    }).then(function(list){
-      var h = list[0];
-      return askPermission(h, "readwrite").then(function(rw){
-        return h.getFile().then(function(f){ return f.text(); }).then(function(txt){
-          pendingImport = { text: txt, handle: rw ? h : null, name: h.name };
-          openImport(txt, h.name);
-        });
-      });
-    }).catch(function(err){ if(err && err.name !== "AbortError") toast("Could not open that file — " + err.name, "err"); });
-  }
-
-  function unlinkFile(){
-    FS.handle = null; FS.name = ""; FS.granted = false;
-    idbDel("handle");
-    setFileUI();
-    toast("File unlinked — still saved in this browser", "info");
-  }
-
-  function restoreHandle(){
-    if(!FS.supported) return;
-    idbGet("handle").then(function(h){
-      if(!h) return;
-      FS.handle = h; FS.name = h.name || "session.json"; FS.granted = false;
-      if(h.queryPermission){
-        h.queryPermission({ mode:"readwrite" }).then(function(st){
-          FS.granted = (st === "granted");
-          setFileUI();
-          if(FS.granted) writeFile(true);
-        }).catch(setFileUI);
-      } else { FS.granted = true; setFileUI(); }
-      setFileUI();
-    });
-  }
-
-  function reconnect(){
-    if(!FS.handle) return linkFile();
-    askPermission(FS.handle, "readwrite").then(function(ok){
-      FS.granted = ok; setFileUI();
-      if(ok){ writeFile(true).then(function(){ toast("Reconnected to " + FS.name, "ok"); }); }
-      else toast("Permission denied for " + FS.name, "err");
-    });
-  }
-
-  function downloadBackup(){
-    var blob = new Blob([fileBlob()], { type:"application/json" });
-    var url = URL.createObjectURL(blob), a = document.createElement("a");
-    a.href = url; a.download = "hometodo-" + todayStr() + ".json";
-    document.body.appendChild(a); a.click();
-    setTimeout(function(){ document.body.removeChild(a); URL.revokeObjectURL(url); }, 120);
-    toast("Backup downloaded", "ok");
-  }
-
-  /* ============ import ============ */
-  var pendingImport = null;
-  function parseSession(txt){
-    var j = JSON.parse(txt);
-    var d = (j && j.data && typeof j.data === "object") ? j.data : j;
-    if(!d || typeof d !== "object") throw new Error("shape");
-    if(!Array.isArray(d.todos) && !Array.isArray(d.done) && typeof d.notes !== "string") throw new Error("shape");
-    return d;
-  }
-  function openImport(txt, label){
-    var d;
-    try{ d = parseSession(txt); }
-    catch(e){ toast("That file is not an Home To-Do session", "err"); pendingImport = null; return; }
-    pendingImport = { data:d, label:label, handle: pendingImport && pendingImport.handle, name: pendingImport && pendingImport.name };
-    var nt = Array.isArray(d.todos) ? d.todos.length : 0;
-    var nd = Array.isArray(d.done) ? d.done.length : 0;
-    var nc = Array.isArray(d.categories) ? d.categories.length : (Array.isArray(d.clients) ? d.clients.length : 0);
-    var words = (String(d.notes||"").trim().match(/\S+/g)||[]).length;
-    var span = "";
-    if(nd){
-      var ts = d.done.map(function(e){ return +e.ts||0; }).filter(Boolean).sort();
-      if(ts.length) span = shortDate(ts[0]) + " to " + shortDate(ts[ts.length-1]);
-    }
-    $("importSummary").innerHTML =
-      esc(label||"file") + "\n" +
-      nt + " task" + (nt===1?"":"s") + " · " + nd + " log entr" + (nd===1?"y":"ies") + (span ? " (" + span + ")" : "") + "\n" +
-      nc + " categor" + (nc===1?"y":"ies") + " · " + words + " word" + (words===1?"":"s") + " of notes";
-    openModal("importModal");
-  }
-  function doImportReplace(){
-    if(!pendingImport) return;
-    adopt(pendingImport.data);
-    selected = null;
-    if(pendingImport.handle){ FS.handle = pendingImport.handle; FS.name = pendingImport.name; FS.granted = true; idbPut("handle", FS.handle); }
-    setFileUI();
-    applyTheme();
-    save(); syncAll();
-    closeModal("importModal");
-    toast("Session replaced", "ok");
-    pendingImport = null;
-  }
-  function doImportMerge(){
-    if(!pendingImport) return;
-    var d = pendingImport.data;
-    var offset = S.seq;
-    var inTodos = (Array.isArray(d.todos)?d.todos:[]).map(normTodo);
-    var inDone  = (Array.isArray(d.done)?d.done:[]).map(normDone);
-    var maxIn = 0;
-    inTodos.concat(inDone).forEach(function(x){ if(x.id > maxIn) maxIn = x.id; });
-    inTodos.forEach(function(t){ t.id = t.id + offset; });
-    inDone.forEach(function(e){ e.id = e.id + offset; });
-    S.seq = offset + maxIn + 1;
-    S.todos = S.todos.concat(inTodos);
-    S.done = S.done.concat(inDone);
-    (Array.isArray(d.categories)?d.categories:(Array.isArray(d.clients)?d.clients:[])).forEach(function(c){ if(typeof c === "string" && c) ensureCategory(c, true); });
-    var inNotes = String(d.notes||"").trim();
-    if(inNotes){
-      S.notes = (S.notes.trim() ? S.notes.replace(/\s+$/,"") + "\n\n" : "") +
-        "----- merged from " + (pendingImport.label||"file") + " on " + shortDate(Date.now()) + " -----\n" + inNotes;
-    }
-    if(pendingImport.handle){ FS.handle = pendingImport.handle; FS.name = pendingImport.name; FS.granted = true; idbPut("handle", FS.handle); }
-    setFileUI();
-    save(); syncAll();
-    closeModal("importModal");
-    toast("Merged " + inTodos.length + " tasks and " + inDone.length + " log entries", "ok");
-    pendingImport = null;
+    if(!booted) txt.textContent = "Connecting";
+    else if(!online){ dot.classList.add("warn"); txt.textContent = "Offline"; }
+    else if(inflight > 0){ dot.classList.add("busy"); txt.textContent = "Saving"; }
+    else { dot.classList.add("live"); txt.textContent = "Saved"; }
+    $("sessionBtn").title = online ? "Saved in Home Assistant" : "Not connected to Home Assistant";
+    $("connBox").hidden = booted && online;
+    $("connTxt").textContent = connMsg || (booted ? "Disconnected from Home Assistant. Reconnecting…" : "Connecting to Home Assistant…");
   }
 
   /* ============ helpers ============ */
@@ -2314,7 +2253,6 @@
     S.ui.theme = t;
     if(t === "dark") document.documentElement.removeAttribute("data-theme");
     else document.documentElement.setAttribute("data-theme", t);
-    store.set("hometodo_theme", t);
     var b = $("themeBtn");
     if(!b) return;
     if(b.getAttribute("data-on") !== t){ b.innerHTML = THEME_ICON[t]; b.setAttribute("data-on", t); }
@@ -2627,13 +2565,6 @@
       syncLists();
       toast(filterQ ? "Filtering on " + filterQ : "Filter cleared", "info");
     }
-    else if(cmd === "save"){
-      if(!FS.handle) linkFile();
-      else if(!FS.granted) reconnect();
-      else writeFile();
-    }
-    else if(cmd === "link"){ linkFile(); }
-    else if(cmd === "open"){ openFile(); }
     else if(cmd === "help"){ openModal("helpModal"); }
     else if(cmd === "clear"){ filterQ = ""; clearSelection(); syncLists(); }
     else toast('Unknown command "' + parts[0] + '" — type help', "err");
@@ -2716,17 +2647,12 @@
   function boot(){
     notesEl = $("notes");
     gridEl = $("grid");
-    // If the session is gone but the pre-paint theme mirror survived, honour it so the
-    // booted state matches what was already painted.
-    if(!loadLocal()){
-      var mirror = store.get("hometodo_theme");
-      if(THEMES.indexOf(mirror) >= 0){ S.ui.theme = mirror; S.ui.themePick = true; }
-    }
-    // a first run never goes through adopt(), so seed the shortcuts here
-    if(!Array.isArray(S.cfg.links)) S.cfg.links = defaultLinks();
-
     applyTheme();
     $("themeBtn").addEventListener("click", cycleTheme);
+    $("listSeg").addEventListener("click", function(e){
+      var b = e.target.closest("button[data-list]");
+      if(b) switchList(b.getAttribute("data-list"));
+    });
 
     /* panels */
     Array.prototype.forEach.call(document.querySelectorAll("[data-collapse]"), function(b){
@@ -3065,28 +2991,7 @@
       $("sessionBtn").setAttribute("aria-expanded", open ? "true" : "false");
     });
     $("sessionMenu").addEventListener("click", function(e){ if(e.target.closest("button")) session.classList.remove("open"); });
-    $("mLink").addEventListener("click", function(){ (FS.handle && !FS.granted) ? reconnect() : linkFile(); });
-    $("mSaveNow").addEventListener("click", function(){ FS.granted ? writeFile() : reconnect(); });
-    $("mOpen").addEventListener("click", openFile);
-    $("mUnlink").addEventListener("click", unlinkFile);
-    $("mDownload").addEventListener("click", downloadBackup);
-    $("mImport").addEventListener("click", function(){ $("filePick").click(); });
     $("mExportTxt").addEventListener("click", exportTxt);
-    $("filePick").addEventListener("change", function(e){
-      var f = e.target.files && e.target.files[0];
-      if(!f) return;
-      var rd = new FileReader();
-      rd.onload = function(){ pendingImport = null; openImport(String(rd.result), f.name); };
-      rd.onerror = function(){ toast("Could not read that file", "err"); };
-      rd.readAsText(f);
-      e.target.value = "";
-    });
-    $("impReplace").addEventListener("click", doImportReplace);
-    $("impMerge").addEventListener("click", doImportMerge);
-    $("impCancel").addEventListener("click", function(){ pendingImport = null; closeModal("importModal"); });
-    $("fsNote").textContent = FS.supported
-      ? "Linking writes every change straight to a file on disk. Your browser also keeps a copy locally."
-      : "This browser cannot write to a file directly. Use Download a backup copy and Import to move a session.";
 
     /* settings */
     function cfgPreview(){
@@ -3176,7 +3081,11 @@
         return;
       }
       if(mod && (e.key === "k" || e.key === "K")){ e.preventDefault(); cmd.focus(); cmd.select(); return; }
-      if(mod && (e.key === "s" || e.key === "S")){ e.preventDefault(); runCommand("save"); return; }
+      if(mod && (e.key === "s" || e.key === "S")){
+        e.preventDefault(); save();
+        toast(online ? "Everything is saved in Home Assistant" : "Offline — edits go to Home Assistant once it's back", online ? "ok" : "warn");
+        return;
+      }
       if(mod && e.key === "/"){ e.preventDefault(); openCalc($("calcInput").value); return; }
     });
     function isTyping(el){
@@ -3191,8 +3100,12 @@
       if(!e.target.closest(".session")) session.classList.remove("open");
     });
 
-    window.addEventListener("beforeunload", function(e){
-      if(FS.handle && FS.granted && FS.dirty){ writeFile(true); e.preventDefault(); e.returnValue = ""; }
+    // Leaving the page sends anything still waiting, such as notes typed a moment ago, then lets go of the
+    // connection. Coming back to a page the browser kept connects again.
+    window.addEventListener("pagehide", function(){ if(hasPending()) save(); disconnect(); });
+    window.addEventListener("pageshow", function(e){ if(e.persisted) connect(); });
+    document.addEventListener("visibilitychange", function(){
+      if(document.visibilityState === "hidden" && hasPending()) save();
     });
 
     /* clock */
@@ -3204,9 +3117,9 @@
     tick(); setInterval(tick, 20000);
     setInterval(function(){ if(!editing && !isDragging && document.activeElement !== notesEl) syncLists(); }, 60000);
 
-    setFileUI();
-    restoreHandle();
+    setSyncUI();
     syncAll();
+    connect();
     if(window.innerWidth > 1020) setTimeout(function(){ $("logText").focus(); }, 120);
   }
 
@@ -3229,9 +3142,12 @@
   else boot();
 
   window.HOMETODO = { state:S, calc:subnetCalc, split:splitSubnet, parseWhen:parseWhen, run:runCommand,
-    snapshot:snapshot, adopt:adopt, FS:FS, parseTags:parseTags, categoryToken:categoryToken, categoryKey:categoryKey,
+    parseTags:parseTags, categoryToken:categoryToken, categoryKey:categoryKey,
     theme:applyTheme, cycleTheme:cycleTheme, ticketUrl:ticketUrl, snowTable:snowTable,
-    addSub:addSub, subStats:subStats };
+    addSub:addSub, subStats:subStats,
+    sync:{ changes:listChanges, pending:hasPending, save:save, switchList:switchList,
+      active:function(){ return active; }, online:function(){ return online; }, booted:function(){ return booted; },
+      inflight:function(){ return inflight; } } };
 })();
 </script>
 </body>
