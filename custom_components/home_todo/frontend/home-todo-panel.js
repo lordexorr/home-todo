@@ -7,6 +7,17 @@ const PAGE = new URL("home-todo.html" + VERSION, import.meta.url);
 const MENU_ICON =
   '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" ' +
   'aria-hidden="true"><path d="M2.5 4h11M2.5 8h11M2.5 12h11"/></svg>';
+// The colors of Home Assistant's theme the page uses, by the names the page gives them.
+const HA_COLORS = {
+  bg: "--primary-background-color",
+  card: "--card-background-color",
+  raise: "--secondary-background-color",
+  ink: "--primary-text-color",
+  "ink-2": "--secondary-text-color",
+  "ink-4": "--disabled-text-color",
+  line: "--divider-color",
+  accent: "--primary-color",
+};
 
 class HomeTodoPanel extends HTMLElement {
   constructor() {
@@ -21,7 +32,26 @@ class HomeTodoPanel extends HTMLElement {
   set hass(hass) {
     this._hass = hass;
     this._showMenu();
-    if (this.onHass) this.onHass(hass); // the page follows Home Assistant's light/dark setting
+    if (this.onHass) this.onHass(hass); // the page follows Home Assistant's theme, light or dark
+  }
+
+  // Home Assistant's colors for the theme it's showing now, which the frame this page runs in inherits from it.
+  // Null when they can't be read, and the page then uses its own light or dark colors.
+  colors() {
+    try {
+      const frame = window.frameElement;
+      if (!frame) return null;
+      const style = frame.ownerDocument.defaultView.getComputedStyle(frame);
+      const colors = {};
+      for (const [name, prop] of Object.entries(HA_COLORS)) {
+        const value = style.getPropertyValue(prop).trim();
+        if (!value || !CSS.supports("color", value)) return null;
+        colors[name] = value;
+      }
+      return colors;
+    } catch (err) {
+      return null;
+    }
   }
   set narrow(narrow) { this._narrow = Boolean(narrow); this._showMenu(); }
   set panel(panel) { this._panel = panel; }

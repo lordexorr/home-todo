@@ -14,8 +14,8 @@ Home To-Do needs Home Assistant 2026.11 or later, and is installed through its M
 4. Go to **Settings → Devices & services → Add integration** and choose **Home To-Do**.
 
 **Home To-Do** then appears in the sidebar for every user. **Configure** on its entry changes the name shown at the
-top of the page and in the sidebar, such as "Lowry Home To-Do". Light and dark follow each person's Home Assistant
-setting.
+top of the page and in the sidebar, such as "Lowry Home To-Do". The page takes its colors from each person's Home
+Assistant theme, light or dark.
 
 ## Lists
 
@@ -29,7 +29,7 @@ task numbers. Categories are shared by both.
 
 Everything is kept in Home Assistant, in `.storage/home_todo` in its config folder, and Home Assistant's backups
 include it. Changes are saved as they're made, and appear straight away on every other device showing the same
-list. Each person's display settings, such as the theme and panel widths, are kept there too.
+list. Each person's display settings, such as panel widths and sort order, are kept there too.
 
 While Home Assistant can't be reached, the page says so, and can't be edited until it's back.
 

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.1
+
+- **Home Assistant's colors:** the page takes its colors from each person's Home Assistant theme. Dark is Home Assistant's black rather than a blue-grey, light is its light grey and white, and buttons and highlights are its blue. A custom theme carries over too. Priority, due dates and finished side tasks keep their own red, amber and green.
+
 ## 0.2.0
 
 - **Its own name:** the page and the sidebar say **Home To-Do**. **Configure** on its entry changes the name for everyone, such as "Lowry Home To-Do", and says that removing Home To-Do keeps the lists.

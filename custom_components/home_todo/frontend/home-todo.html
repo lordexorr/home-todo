@@ -94,6 +94,26 @@
     --chip-s-fg:58%; --chip-l-fg:29%;
     color-scheme:light;
   }
+
+  /* Home Assistant's own colors, for whichever theme each person uses there, light or dark. Dim and Slate above
+     still give the red, amber and green, and are used whole when Home Assistant's colors can't be read. */
+  html[data-ha]{
+    --bg:var(--ha-bg); --panel:var(--ha-card);
+    --panel-2:color-mix(in srgb,var(--ha-card) 97%,var(--ha-ink));
+    --raise:var(--ha-raise); --raise-2:color-mix(in srgb,var(--ha-raise) 88%,var(--ha-ink));
+    --line:color-mix(in srgb,var(--ha-line) 60%,transparent); --line-2:var(--ha-line);
+    --line-3:color-mix(in srgb,var(--ha-ink) 22%,transparent);
+    --ink:var(--ha-ink); --ink-2:var(--ha-ink-2);
+    --ink-3:color-mix(in srgb,var(--ha-ink-2) 65%,var(--ha-ink-4));
+    --ink-4:color-mix(in srgb,var(--ha-ink-2) 30%,var(--ha-ink-4));
+    --accent:var(--ha-accent); --accent-2:color-mix(in srgb,var(--ha-accent) 82%,#000);
+    --btn-bg:var(--accent); --btn-bg-2:var(--accent-2); --brand-a:var(--accent);
+    --select:color-mix(in srgb,var(--accent) 30%,transparent);
+    --accent-soft:color-mix(in srgb,var(--accent) 14%,transparent);
+    --accent-line:color-mix(in srgb,var(--accent) 42%,transparent);
+    --topbar-a:var(--ha-card); --topbar-b:color-mix(in srgb,var(--ha-card) 70%,var(--ha-bg));
+    --cmdbar-a:var(--ha-bg); --cmdbar-b:color-mix(in srgb,var(--ha-bg) 60%,var(--ha-card));
+  }
   *{ box-sizing:border-box; }
   [hidden]{ display:none !important; }
   html,body{ height:100%; }
@@ -144,7 +164,7 @@
   .vrow{ display:flex; align-items:flex-end; gap:10px; }
   .spark{ display:flex; align-items:flex-end; gap:2px; height:18px; }
   .spark i{ width:4px; border-radius:2px; background:var(--raise-2); min-height:2px; display:block; transition:height .3s ease; }
-  .spark i.now{ background:var(--accent); box-shadow:0 0 8px rgba(91,157,255,.45); }
+  .spark i.now{ background:var(--accent); box-shadow:0 0 8px color-mix(in srgb,var(--accent) 45%,transparent); }
 
   .quicklinks{ display:flex; align-items:center; gap:4px; margin-left:auto; min-width:0; overflow:hidden; }
   .qlabel{ font-size:9.5px; letter-spacing:.11em; text-transform:uppercase; color:var(--ink-4);
@@ -209,7 +229,7 @@
   .gutter{ position:relative; cursor:col-resize; touch-action:none; }
   .gutter::before{ content:''; position:absolute; top:12px; bottom:12px; left:50%; width:1px; transform:translateX(-50%);
     background:var(--line); transition:background .15s, width .15s; }
-  .gutter:hover::before,.gutter.active::before{ background:var(--accent); width:2px; box-shadow:0 0 10px rgba(91,157,255,.6); }
+  .gutter:hover::before,.gutter.active::before{ background:var(--accent); width:2px; box-shadow:0 0 10px color-mix(in srgb,var(--accent) 60%,transparent); }
   body.resizing{ cursor:col-resize; user-select:none; }
   body.resizing *{ user-select:none !important; }
 
@@ -308,7 +328,7 @@
     border:1px solid transparent; transition:background .13s, border-color .13s; }
   .row:hover{ background:var(--panel-2); }
   .row.sel{ background:var(--accent-soft); border-color:var(--accent-line); box-shadow:inset 2px 0 0 var(--accent); }
-  .row.sel:hover{ background:rgba(91,157,255,.17); }
+  .row.sel:hover{ background:color-mix(in srgb,var(--accent) 17%,transparent); }
   .rmain{ flex:1; min-width:0; display:flex; flex-direction:column; gap:3px; padding-top:1px; }
   .rline{ display:flex; align-items:baseline; gap:7px; flex-wrap:wrap; }
   .text{ font-size:13.5px; line-height:1.45; word-break:break-word; cursor:pointer; }
@@ -1799,13 +1819,29 @@
   }
 
   /* ============ theme ============ */
-  // Light or dark, following Home Assistant's own setting for whoever is signed in: Slate when light, Dim when dark.
-  var darkMode = null;
+  // Home Assistant's own colors, for whoever is signed in, over Slate when light and Dim when dark.
+  var darkMode = null, haThemes, haTheme, haColors = {}, colorCheck = 0;
   function applyTheme(){
     var hass = HOST && HOST.hass, dark = !!(hass && hass.themes && hass.themes.darkMode);
-    if(dark === darkMode) return;
-    darkMode = dark;
-    document.documentElement.setAttribute("data-theme", dark ? "dim" : "slate");
+    if(dark !== darkMode){
+      darkMode = dark;
+      document.documentElement.setAttribute("data-theme", dark ? "dim" : "slate");
+    }
+    // The colors change only with Home Assistant's theme settings, which come as a new hass.themes or selectedTheme.
+    // Home Assistant may finish restyling just after it says so, so they're read again a moment later.
+    var themes = hass && hass.themes, theme = hass && hass.selectedTheme;
+    if(themes === haThemes && theme === haTheme) return;
+    haThemes = themes; haTheme = theme;
+    applyColors();
+    clearTimeout(colorCheck);
+    colorCheck = setTimeout(applyColors, 300);
+  }
+  function applyColors(){
+    var colors = (HOST && HOST.colors && HOST.colors()) || {}, root = document.documentElement, name;
+    for(name in haColors) if(!(name in colors)) root.style.removeProperty("--ha-" + name);
+    for(name in colors) if(colors[name] !== haColors[name]) root.style.setProperty("--ha-" + name, colors[name]);
+    haColors = colors;
+    if(Object.keys(colors).length) root.setAttribute("data-ha", ""); else root.removeAttribute("data-ha");
   }
 
   /* ============ layout ============ */
