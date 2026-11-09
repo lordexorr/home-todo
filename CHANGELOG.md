@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.1
+
+- **An example shortcut:** the top bar starts with a **Trash schedule** shortcut, so it's clear what shortcuts are for. Change it to your town's pickup calendar under **Settings**, or remove it there and it stays removed. Everyone who hasn't saved their own shortcuts yet sees it.
+- **Clearer hints** in an empty shortcut row: "Label, such as Trash schedule" and "Web address it opens (https://…)".
+
 ## 0.3.0
 
 - **Repeating tasks:** a task can repeat every so many days, weeks, months or years, set with the new ↻ button beside the due date, in the task's details, or with `*1w` or `~3mo` in the command bar. **On a schedule** counts from the due date, so trash stays on Mondays even when it's done late; **after it's done** counts from the day it's ticked off, so the furnace filter is due three months after the last change. Ticking one off logs it and brings it straight back with its next due date and its side tasks unticked. `repeat # none` stops one repeating.

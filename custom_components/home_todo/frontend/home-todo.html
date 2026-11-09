@@ -404,7 +404,7 @@
   .cfgrow{ display:flex; align-items:center; gap:8px; margin-top:8px; }
   .cfgrow.end{ justify-content:flex-end; margin-top:18px; }
   .linkrow{ display:flex; align-items:center; gap:6px; margin-top:6px; }
-  .linkrow .lbl{ flex:0 0 108px; font-size:12.5px; }
+  .linkrow .lbl{ flex:0 1 196px; min-width:110px; font-size:12.5px; }
   .linkrow .pth{ flex:1; min-width:0; font-family:var(--mono); font-size:11.5px; }
   .linkrow .rowbtn{ opacity:1; flex:0 0 auto; }
   .cfgrow .field{ flex:1; font-family:var(--mono); font-size:12.5px; }
@@ -798,6 +798,8 @@
       <div class="msub" style="margin-top:0">Shortcuts in the top bar</div>
       <div class="mnote" style="margin-top:0;padding-top:0;border:0">
         Each shortcut opens its web address in a new tab. They're yours: everyone sets their own.
+        <b>Trash schedule</b> is there as an example, so change it to your town's pickup calendar or remove it
+        with &#10005;.
       </div>
       <div id="cfgLinks"></div>
       <div class="cfgrow">
@@ -869,7 +871,8 @@
       </div>
       <div class="msub">Top bar shortcuts</div>
       <div class="mnote" style="margin-top:0;padding-top:0;border:0">
-        Shortcut links appear in the top bar once you add some under Settings, in the menu beside the clock. Each one
+        Shortcut links appear in the top bar, set under Settings in the menu beside the clock. There's one to begin
+        with, <b>Trash schedule</b>, as an example to change or remove. Each one
         opens its web address in a new tab.
       </div>
       <div class="msub">Categories</div>
@@ -911,7 +914,7 @@
   /* ============ state ============ */
   var S = {
     seq: 1, todos: [], done: [], categories: [], notes: "",
-    cfg: { links: [], calendar: false },
+    cfg: { links: defaultLinks(), calendar: false, linksSaved: false },
     ui: defaultUi()
   };
 
@@ -956,7 +959,9 @@
     return out;
   }
   // Top-bar shortcuts (none by default). Only a full http(s) address makes a link.
-  function defaultLinks(){ return []; }
+  function defaultLinks(){
+    return [{ label:"Trash schedule", path:"https://www.google.com/search?q=trash+pickup+schedule+near+me" }];
+  }
   function linkUrl(path){
     var p = String(path == null ? "" : path).trim();
     return /^https?:\/\//i.test(p) ? p : "";
@@ -1013,13 +1018,15 @@
     if(ui.list === "mine" || ui.list === "family") out.list = ui.list;
     S.ui = out;
     S.cfg = {
-      // An absent links field means "use the defaults"; an empty array means the user cleared them.
-      links: Array.isArray(cfg.links)
+      // Until someone saves Settings, they see the example shortcut. Once they have, an empty list means they
+      // removed it.
+      links: Array.isArray(cfg.links) && (cfg.links.length || cfg.linksSaved === true)
         ? cfg.links.filter(function(l){ return l && typeof l.label === "string" && typeof l.path === "string"; })
             .map(function(l){ return { label:l.label.trim(), path:l.path.trim() }; })
             .filter(function(l){ return l.label && l.path; })
         : defaultLinks(),
-      calendar: cfg.calendar === true   // this person's list on Home Assistant's calendar
+      calendar: cfg.calendar === true,   // this person's list on Home Assistant's calendar
+      linksSaved: cfg.linksSaved === true
     };
   }
 
@@ -2793,9 +2800,9 @@
       var row = document.createElement("div");
       row.className = "linkrow";
       var a = document.createElement("input");
-      a.className = "field lbl"; a.placeholder = "Label"; a.value = label || "";
+      a.className = "field lbl"; a.placeholder = "Label, such as Trash schedule"; a.value = label || "";
       var b = document.createElement("input");
-      b.className = "field pth"; b.placeholder = "https://…"; b.value = path || "";
+      b.className = "field pth"; b.placeholder = "Web address it opens (https://…)"; b.value = path || "";
       b.spellcheck = false;
       var x = document.createElement("button");
       x.type = "button"; x.className = "rowbtn del"; x.textContent = "\u2715"; x.title = "Remove";
@@ -2823,6 +2830,7 @@
     });
     $("cfgSave").addEventListener("click", function(){
       S.cfg.links = readLinkEditor();
+      S.cfg.linksSaved = true;
       S.cfg.calendar = $("cfgCalendar").checked;
       save(); syncAll(); closeModal("cfgModal");
       toast("Settings saved", "ok");

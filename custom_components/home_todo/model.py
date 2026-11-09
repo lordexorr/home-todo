@@ -205,6 +205,8 @@ def norm_prefs(raw: Any) -> dict:
     cfg: dict[str, Any] = {}
     if isinstance(cfg_in.get("calendar"), bool):
         cfg["calendar"] = cfg_in["calendar"]
+    if isinstance(cfg_in.get("linksSaved"), bool):  # once saved, no links means they removed the example
+        cfg["linksSaved"] = cfg_in["linksSaved"]
     if isinstance(cfg_in.get("links"), list):
         cfg["links"] = [{"label": link["label"].strip(), "path": link["path"].strip()}
                         for link in cfg_in["links"]
