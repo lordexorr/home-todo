@@ -1,4 +1,5 @@
-"""Home To-Do: task lists for the house, on a page in Home Assistant's sidebar."""
+"""Home To-Do: task lists for the house, on a page in Home Assistant's sidebar, with their due dates on Home
+Assistant's calendar."""
 from __future__ import annotations
 
 from pathlib import Path
@@ -6,6 +7,7 @@ from pathlib import Path
 from homeassistant.components import frontend, panel_custom
 from homeassistant.components.http import StaticPathConfig
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.typing import ConfigType
@@ -17,6 +19,7 @@ from .runtime import HomeTodo
 
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 FRONTEND_DIR = Path(__file__).parent / "frontend"
+PLATFORMS = [Platform.CALENDAR]
 
 type HomeTodoConfigEntry = ConfigEntry[HomeTodo]
 
@@ -42,12 +45,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: HomeTodoConfigEntry) -> 
         embed_iframe=True,
     )
     entry.async_on_unload(lambda: frontend.async_remove_panel(hass, PANEL))
+    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     # A new name under Configure starts everything again, so the sidebar and every open page show it.
     entry.async_on_unload(entry.add_update_listener(_async_reload))
     return True
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: HomeTodoConfigEntry) -> bool:
+    if not await hass.config_entries.async_unload_platforms(entry, PLATFORMS):
+        return False
     await entry.runtime_data.async_stop()
     return True
 

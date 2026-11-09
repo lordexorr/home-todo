@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.0
+
+- **Repeating tasks:** a task can repeat every so many days, weeks, months or years, set with the new ↻ button beside the due date, in the task's details, or with `*1w` or `~3mo` in the command bar. **On a schedule** counts from the due date, so trash stays on Mondays even when it's done late; **after it's done** counts from the day it's ticked off, so the furnace filter is due three months after the last change. Ticking one off logs it and brings it straight back with its next due date and its side tasks unticked. `repeat # none` stops one repeating.
+- **Home Assistant's calendar:** the Family list's tasks with a due date are on Home Assistant's calendar as **Home To-Do Family**, with scheduled repeats on each date they're coming up. Automations can use it like any calendar.
+- **Your own list on the calendar:** each person can put their list there too, under **Settings**. It's off unless they turn it on, since Home Assistant shows every calendar to everyone who signs in.
+
 ## 0.2.1
 
 - **Home Assistant's colors:** the page takes its colors from each person's Home Assistant theme. Dark is Home Assistant's black rather than a blue-grey, light is its light grey and white, and buttons and highlights are its blue. A custom theme carries over too. Priority, due dates and finished side tasks keep their own red, amber and green.

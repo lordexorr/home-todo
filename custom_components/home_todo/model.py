@@ -5,22 +5,31 @@ Everything is kept in one document:
 
 - lists: "family", shared by everyone, and one list per user, under the user's id.
 - categories: the category names every list shares.
-- prefs: each user's display settings ("ui") and top-bar shortcuts ("cfg").
+- prefs: each user's display settings ("ui"), and their top-bar shortcuts and whether their list is on Home
+  Assistant's calendar ("cfg").
 - rev: goes up by one with each change.
 
 A list holds its open tasks ("todos"), its completed log ("done"), its scratchpad ("notes"), and "seq", the next task
-number. Task numbers belong to a list, and a task keeps its number when it's completed."""
+number. Task numbers belong to a list, and a task keeps its number when it's completed.
+
+A task can repeat. Ticked off, it goes to the log under a new number and stays open with its next due date. "from"
+says what that's counted from: "due", on a schedule from its due date, or "done", from the day it was ticked off."""
 from __future__ import annotations
 
 import math
 import re
 import time
+from calendar import monthrange
+from datetime import date, timedelta
 from typing import Any
 
 FAMILY = "family"
 SORTS = ("manual", "due", "pri", "cat", "age")  # what tasks are sorted by first
 THEN_SORTS = ("none", "due", "pri", "cat", "age")  # and then by
 LIST_KINDS = ("mine", "family")
+REPEAT_UNITS = ("day", "week", "month", "year")
+REPEAT_MAX = 999  # the most days, weeks, months or years between repeats
+PRI_NAMES = {"hi": "High", "md": "Medium", "lo": "Low"}
 _DATE = re.compile(r"\d{4}-\d{2}-\d{2}")
 
 
@@ -105,6 +114,21 @@ def norm_subs(value: Any) -> list[dict]:
     return out
 
 
+def norm_repeat(value: Any) -> dict | None:
+    """How often a task repeats, or None. "day" is the day of the month a monthly or yearly schedule keeps to, so
+    one due on the 31st is due on the last day of shorter months and back on the 31st after them."""
+    value = _dict(value)
+    every = _int(value.get("every"))
+    if every < 1 or value.get("unit") not in REPEAT_UNITS:
+        return None
+    out: dict[str, Any] = {"every": min(every, REPEAT_MAX), "unit": value["unit"],
+                           "from": "done" if value.get("from") == "done" else "due"}
+    day = _int(value.get("day"))
+    if 1 <= day <= 31:
+        out["day"] = day
+    return out
+
+
 def norm_todo(t: Any, now: int) -> dict:
     """An open task, with every field present and valid."""
     t = _dict(t)
@@ -121,6 +145,7 @@ def norm_todo(t: Any, now: int) -> dict:
         "subs": norm_subs(t.get("subs")),
         "subsOpen": bool(t.get("subsOpen")),
         "notes": _text(t.get("notes")),
+        "repeat": norm_repeat(t.get("repeat")),
         "created": created,
         "updated": _int(t.get("updated")) or created,
     }
@@ -159,7 +184,7 @@ def norm_list(raw: Any, list_id: str, now: int) -> dict:
 
 
 def norm_prefs(raw: Any) -> dict:
-    """A user's display settings and top-bar shortcuts, keeping only values the page can use."""
+    """A user's display settings, top-bar shortcuts and calendar setting, keeping only values the page can use."""
     raw = _dict(raw)
     ui_in, cfg_in = _dict(raw.get("ui")), _dict(raw.get("cfg"))
     ui: dict[str, Any] = {}
@@ -178,6 +203,8 @@ def norm_prefs(raw: Any) -> dict:
     if ui_in.get("list") in LIST_KINDS:
         ui["list"] = ui_in["list"]
     cfg: dict[str, Any] = {}
+    if isinstance(cfg_in.get("calendar"), bool):
+        cfg["calendar"] = cfg_in["calendar"]
     if isinstance(cfg_in.get("links"), list):
         cfg["links"] = [{"label": link["label"].strip(), "path": link["path"].strip()}
                         for link in cfg_in["links"]
@@ -277,3 +304,114 @@ def apply_changes(doc: dict, list_id: str, changes: Any, now: int | None = None)
     for name in _list(cats.get("add")):
         _add_category(doc["categories"], name)
     return {key: {str(old): new for old, new in m.items()} for key, m in remap.items() if m}
+
+
+# ---------- repeating tasks, and the calendar ----------
+
+def parse_date(value: Any) -> date | None:
+    try:
+        return date.fromisoformat(value) if _date(value) else None
+    except ValueError:
+        return None
+
+
+def repeat_step(base: date, rep: dict, times: int) -> date:
+    """base moved on by the repeat's interval, so many times over. Months and years keep to the repeat's day of the
+    month where it has one, and otherwise to base's, falling on the last day of shorter months."""
+    n = rep["every"] * times
+    if rep["unit"] == "day":
+        return base + timedelta(days=n)
+    if rep["unit"] == "week":
+        return base + timedelta(weeks=n)
+    if rep["unit"] == "month":
+        months = base.month - 1 + n
+        year, month = base.year + months // 12, months % 12 + 1
+    else:
+        year, month = base.year + n, base.month
+    return date(year, month, min(rep.get("day") or base.day, monthrange(year, month)[1]))
+
+
+def _first_step(due: date, rep: dict, after: date) -> int:
+    """A number of steps from due that's no later than the first one past after, so counting starts near it."""
+    gap = (after - due).days
+    if gap <= 0:
+        return 1
+    per = {"day": 1, "week": 7, "month": 31, "year": 366}[rep["unit"]] * rep["every"]
+    return max(1, gap // per)
+
+
+def next_due(todo: dict, today: date) -> date:
+    """The due date a repeating task moves to when it's ticked off today. On a schedule, that's the first date in it
+    after today, so missed ones don't pile up. After it's done, it's counted from today."""
+    rep, due = todo["repeat"], parse_date(todo.get("due"))
+    if rep["from"] == "done" or not due:
+        return repeat_step(today, {**rep, "day": None}, 1)
+    times = _first_step(due, rep, today)
+    while (day := repeat_step(due, rep, times)) <= today:
+        times += 1
+    return day
+
+
+def task_days(todo: dict, first: date, last: date, today: date) -> list[date]:
+    """The days from first to last a task is on the calendar: its due date and, if it repeats on a schedule, every
+    date after today that it'll be due on."""
+    due = parse_date(todo.get("due"))
+    if not due:
+        return []
+    days = [due] if first <= due <= last else []
+    rep = todo.get("repeat")
+    if not rep or rep["from"] != "due":
+        return days
+    times = _first_step(due, rep, max(first, today))
+    while times < 100_000:
+        try:
+            day = repeat_step(due, rep, times)
+        except (OverflowError, ValueError):  # past the year 9999
+            break
+        if day > last:
+            break
+        if day > today and day >= first:
+            days.append(day)
+        times += 1
+    return days
+
+
+def next_day(todo: dict, today: date) -> date | None:
+    """The first day, today or later, a task is on the calendar."""
+    due = parse_date(todo.get("due"))
+    if not due:
+        return None
+    if due >= today:
+        return due
+    rep = todo.get("repeat")
+    if not rep or rep["from"] != "due":
+        return None
+    try:
+        return next_due(todo, today)
+    except (OverflowError, ValueError):
+        return None
+
+
+def repeat_text(rep: dict) -> str:
+    """ "Repeats every 3 months, counted from when it's done" and the like."""
+    every = f"every {rep['unit']}" if rep["every"] == 1 else f"every {rep['every']} {rep['unit']}s"
+    return f"Repeats {every}, " + ("counted from when it's done" if rep["from"] == "done" else "on a schedule")
+
+
+def event_text(todo: dict) -> tuple[str, str]:
+    """A task's title and details, as its calendar event shows them."""
+    lines = []
+    if todo.get("category"):
+        lines.append(f"Category: {todo['category']}")
+    lines.append(f"Priority: {PRI_NAMES.get(todo.get('pri'), 'Medium')}")
+    if todo.get("repeat"):
+        lines.append(repeat_text(todo["repeat"]))
+    if todo.get("status") == "waiting":
+        lines.append("Waiting" + (f" on {todo['waitingOn']}" if todo.get("waitingOn") else ""))
+    subs = [sb for sb in todo.get("subs") or [] if sb.get("text", "").strip()]
+    if subs:
+        lines.append("")
+        lines += [("\u2611 " if sb.get("done") else "\u2610 ") + sb["text"].strip() for sb in subs]
+    if (todo.get("notes") or "").strip():
+        lines += ["", todo["notes"].strip()]
+    return todo.get("text") or "(untitled)", "\n".join(lines)

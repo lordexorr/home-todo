@@ -1,8 +1,9 @@
 # Home To-Do
 
 Task lists for the house, on a page in Home Assistant's sidebar. Everyone has their own list, **Mine**, and shares
-the **Family** list. Tasks have a priority, a due date, a category and side tasks. Finished ones move to a completed
-log, grouped by day. Each task and log entry has its own notes, beside a scratchpad for each list.
+the **Family** list. Tasks have a priority, a due date, a category and side tasks, and can repeat. Finished ones move
+to a completed log, grouped by day. Each task and log entry has its own notes, beside a scratchpad for each list.
+Tasks with a due date are on Home Assistant's calendar.
 
 ## Install
 
@@ -19,11 +20,35 @@ Assistant theme, light or dark.
 
 ## Lists
 
-- **Mine** is each person's own list. Only they see it, administrators included.
+- **Mine** is each person's own list. Only they see it, administrators included, unless they put it on Home
+  Assistant's calendar.
 - **Family** is shared: everyone who uses Home To-Do sees it and can change it.
 
 Switch between them with the buttons beside the logo. Each list has its own tasks, log and scratchpad, and its own
 task numbers. Categories are shared by both.
+
+## Repeating tasks
+
+A task can repeat every so many days, weeks, months or years, set with the ↻ button beside its due date, in its
+details, or in the command bar. Each repeating task counts its next due date one of two ways:
+
+- **On a schedule** (`*` in the command bar) counts from the due date. `add Take out trash ^mon *1w` stays on Mondays
+  even when it's done late, and one that's overdue moves to its next date that's still ahead.
+- **After it's done** (`~`) counts from the day it's ticked off. `add Change furnace filter ~3mo` is due three months
+  after the last change.
+
+Ticking one off puts it in the completed log and brings it straight back with its next due date, its side tasks
+unticked. A monthly one due on the 31st is due on the last day of shorter months.
+
+## Home Assistant's calendar
+
+The Family list's tasks with a due date are on Home Assistant's calendar, as **Home To-Do Family**, beside any other
+calendars there. Each is an all-day event, and a task that repeats on a schedule shows on each date it's coming up.
+Automations can use it like any calendar, such as for a morning reminder of what's due.
+
+Each person can put their own list there too, under **Settings** in the menu beside the clock on Home To-Do's page.
+It's off unless they turn it on: Home Assistant shows every calendar to everyone who signs in, so a personal list on
+it is no longer private.
 
 ## Where the lists are kept
 

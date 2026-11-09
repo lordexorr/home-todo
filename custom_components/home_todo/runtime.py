@@ -1,5 +1,5 @@
 """Home To-Do's lists while Home Assistant runs: kept in .storage/home_todo, changed by the page's commands, and
-pushed to every open page that shows them."""
+pushed to every open page that shows them and to the calendars."""
 from __future__ import annotations
 
 from collections.abc import Callable
@@ -13,6 +13,7 @@ from . import model
 from .const import SAVE_DELAY, STORAGE_KEY, STORAGE_VERSION
 
 type Listener = Callable[[dict[str, Any]], None]
+type Watcher = Callable[[set[str], bool], None]  # the lists that changed, and whether calendar settings did
 
 
 class HomeTodo:
@@ -22,6 +23,7 @@ class HomeTodo:
         self._store: Store[dict[str, Any]] = Store(hass, STORAGE_VERSION, STORAGE_KEY)
         self.doc: dict[str, Any] = model.new_doc()
         self._listeners: dict[object, tuple[str, Listener]] = {}
+        self._watchers: list[Watcher] = []
 
     async def async_load(self) -> None:
         self.doc = model.norm_doc(await self._store.async_load())
@@ -50,6 +52,24 @@ class HomeTodo:
         return remove
 
     @callback
+    def watch(self, watcher: Watcher) -> Callable[[], None]:
+        """For the calendars: called after every change."""
+        self._watchers.append(watcher)
+
+        @callback
+        def remove() -> None:
+            if watcher in self._watchers:
+                self._watchers.remove(watcher)
+
+        return remove
+
+    @callback
+    def calendar_users(self) -> list[str]:
+        """Everyone who's chosen to have their own list on Home Assistant's calendar."""
+        return [uid for uid, prefs in self.doc["prefs"].items()
+                if prefs.get("cfg", {}).get("calendar") and uid in self.doc["lists"]]
+
+    @callback
     def everything(self, user: User) -> dict[str, Any]:
         """All a user's page shows, for when it opens or reconnects."""
         if model.ensure_personal(self.doc, user.id):
@@ -72,19 +92,28 @@ class HomeTodo:
         remap = model.apply_changes(self.doc, list_id, changes)
         self._changed()
         self._publish({list_id}, categories=self.doc["categories"] != categories)
+        self._tell({list_id}, calendars=False)
         return {"rev": self.doc["rev"], "remap": remap}
 
     @callback
     def set_prefs(self, user_id: str, prefs: dict[str, Any]) -> dict[str, Any]:
+        before = self.calendar_users()
         self.doc["prefs"][user_id] = model.norm_prefs(prefs)
         self._changed()
         self._publish(set(), prefs_for=user_id)
+        self._tell(set(), calendars=self.calendar_users() != before)
         return {"rev": self.doc["rev"]}
 
     @callback
     def _changed(self) -> None:
         self.doc["rev"] += 1
         self._store.async_delay_save(lambda: self.doc, SAVE_DELAY)
+
+    @callback
+    def _tell(self, lists: set[str], calendars: bool) -> None:
+        if lists or calendars:
+            for watcher in list(self._watchers):
+                watcher(lists, calendars)
 
     @callback
     def _publish(self, lists: set[str], categories: bool = False, prefs_for: str | None = None) -> None:

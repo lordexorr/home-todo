@@ -379,7 +379,30 @@
   .due.today{ color:var(--warn); border-color:rgba(224,165,60,.45); background:var(--warn-soft); }
   .due.over{ color:var(--danger); border-color:rgba(240,104,92,.45); background:var(--danger-soft); }
   .addrow .field.grow{ flex-basis:118px; }
+  .rbadge{ display:inline-flex; align-items:center; gap:4px; font-family:var(--mono); font-size:10.5px; font-weight:500;
+    padding:1px 7px; border-radius:5px; border:1px solid var(--line-2); color:var(--ink-3); background:var(--raise); }
+
+  /* repeat picker */
+  .rpick{ position:relative; flex:0 0 auto; }
+  .rpick-btn{ height:var(--ctl); min-width:var(--ctl); display:inline-flex; align-items:center; justify-content:center;
+    padding:0 9px; background:var(--raise); border:1px solid var(--line); border-radius:7px; color:var(--ink-4);
+    font-size:12.5px; white-space:nowrap; transition:border-color .15s, color .15s, background .15s; }
+  .rpick-btn:hover{ border-color:var(--line-2); color:var(--ink-2); }
+  .rpick-btn.on{ color:var(--accent); border-color:var(--accent-line); background:var(--accent-soft); }
+  .rpick.open .rpick-btn{ border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-soft); }
+  .rpick-pop{ position:fixed; width:268px; background:var(--panel-2);
+    border:1px solid var(--line-2); border-radius:10px; box-shadow:var(--shadow-2); padding:10px; z-index:60; display:none; }
+  .rpick.open .rpick-pop{ display:block; }
+  .rpick-line{ display:flex; align-items:center; gap:7px; font-size:12.5px; color:var(--ink-2); }
+  .rpick-line .field{ height:30px; padding-top:0; padding-bottom:0; }
+  .rpick-n{ width:62px; }
+  .rpick-unit{ flex:1; }
+  .rpick .seg{ display:flex; margin-top:9px; }
+  .rpick .seg button{ flex:1; }
+  .rpick-hint{ margin-top:7px; font-size:11.5px; line-height:1.45; color:var(--ink-3); }
+  .rpick-acts{ display:flex; justify-content:space-between; gap:8px; margin-top:10px; }
   .cfgrow{ display:flex; align-items:center; gap:8px; margin-top:8px; }
+  .cfgrow.end{ justify-content:flex-end; margin-top:18px; }
   .linkrow{ display:flex; align-items:center; gap:6px; margin-top:6px; }
   .linkrow .lbl{ flex:0 0 108px; font-size:12.5px; }
   .linkrow .pth{ flex:1; min-width:0; font-family:var(--mono); font-size:11.5px; }
@@ -642,6 +665,7 @@
           </div>
         </div>
         <input type="date" class="field date empty" id="todoDue" title="Due date (optional)">
+        <div class="rpick" data-target="todo"></div>
         <input class="field grow" id="todoText" placeholder="Add a task…" autocomplete="off">
         <button class="btn" id="todoAdd">Add</button>
       </div>
@@ -726,6 +750,10 @@
             </div>
           </div>
         </div>
+        <div class="drow" id="dRepRow">
+          <span class="dlabel">Repeat</span>
+          <div class="rpick" data-target="detail"></div>
+        </div>
         <div class="drow" id="dWaitRow" hidden>
           <input class="field grow" id="dWaitOn" placeholder="Waiting on… (a delivery, a call back, a contractor)" autocomplete="off">
           <span class="dlabel">Follow up</span>
@@ -774,6 +802,14 @@
       <div id="cfgLinks"></div>
       <div class="cfgrow">
         <button type="button" class="ghost" id="cfgAddLink">Add a shortcut</button>
+      </div>
+      <div class="msub">Home Assistant's calendar</div>
+      <label class="toggle"><input type="checkbox" id="cfgCalendar"><span class="tk"></span><span>Show my list on Home Assistant's calendar</span></label>
+      <div class="mnote" style="margin-top:6px;padding-top:0;border:0">
+        Family's tasks with a due date are always on it. Turned on, yours appear there too, as a calendar of your
+        own, and <b>everyone who signs in to Home Assistant can see them</b>.
+      </div>
+      <div class="cfgrow end">
         <button class="btn" id="cfgSave">Save</button>
       </div>
     </div>
@@ -793,6 +829,7 @@
         <span class="c">wait &lt;#&gt; &lt;on&gt;</span><span class="d">Park a task as waiting and say what it is waiting on.</span>
         <span class="c">resume &lt;#&gt;</span><span class="d">Move a waiting task back to active.</span>
         <span class="c">pri &lt;#&gt; &lt;hi|md|lo&gt;</span><span class="d">Set priority.</span>
+        <span class="c">repeat &lt;#&gt; &lt;how&gt;</span><span class="d">Make a task repeat: <code>*1w</code> on a schedule, <code>~3mo</code> after it's done, or <code>none</code>.</span>
         <span class="c">sub &lt;#&gt; &lt;text&gt;</span><span class="d">Add a side task under a task. <code>step</code> works too.</span>
         <span class="c">note &lt;text&gt;</span><span class="d">Append a line to whichever notes are open — the selected task, or the scratchpad.</span>
         <span class="c">find &lt;text&gt;</span><span class="d">Filter tasks and the log. Run <code>find</code> with nothing to clear it.</span>
@@ -800,7 +837,8 @@
       </div>
       <div class="msub">Lists</div>
       <div class="mnote" style="margin-top:0;padding-top:0;border:0">
-        <b>Mine</b> is your own list, and only you see it. <b>Family</b> is shared: everyone who uses Home To-Do
+        <b>Mine</b> is your own list, and only you see it, unless you put it on Home Assistant's calendar under
+        Settings. <b>Family</b> is shared: everyone who uses Home To-Do
         sees it and can change it. Switch between them with the buttons beside the logo. Each list has its own
         tasks, log and scratchpad, and its own task numbers; categories are shared by both.
       </div>
@@ -810,6 +848,24 @@
         Each one ticks off on its own and can carry its own notes, opened with the ≡ button beside it.
         In the task list they fold away behind the <b>2/5</b> counter; click it to show or hide them.
         They follow the task into the completed log.
+      </div>
+      <div class="msub">Repeating tasks</div>
+      <div class="mnote" style="margin-top:0;padding-top:0;border:0">
+        Set a task to repeat with the <b>&#8635;</b> button beside the due date, in its details, or in the command bar
+        with <code>d</code> days, <code>w</code> weeks, <code>mo</code> months or <code>y</code> years.<br>
+        <b>On a schedule</b>, with <code>*</code>, counts from the due date: <code>add Take out trash ^mon *1w</code>
+        stays on Mondays even when it's done late, and one that's overdue moves to its next date that's still ahead.<br>
+        <b>After it's done</b>, with <code>~</code>, counts from the day you tick it off:
+        <code>add Change furnace filter ~3mo</code> is due three months after the last change.<br>
+        Ticking one off puts it in the completed log and brings it straight back with its next due date, its side
+        tasks unticked.
+      </div>
+      <div class="msub">Home Assistant's calendar</div>
+      <div class="mnote" style="margin-top:0;padding-top:0;border:0">
+        Family's tasks that have a due date are on Home Assistant's calendar, and a task that repeats on a schedule
+        shows on each date it's coming up. Automations can use it too, such as a morning reminder of what's due.
+        Your own list can be there as well, turned on under Settings, though everyone who signs in to Home Assistant
+        can see every calendar on it.
       </div>
       <div class="msub">Top bar shortcuts</div>
       <div class="mnote" style="margin-top:0;padding-top:0;border:0">
@@ -829,7 +885,8 @@
       <div class="msub">Shorthand</div>
       <div class="mnote" style="margin-top:0;padding-top:0;border:0">
         <b>!</b> at the start of a task sets high priority — <code>add !water heater is leaking</code>.<br>
-        <b>^friday</b> or <b>^+2d</b> in an <code>add</code> sets the due date inline.
+        <b>^friday</b> or <b>^+2d</b> in an <code>add</code> sets the due date inline.<br>
+        <b>*1w</b> or <b>~3mo</b> in an <code>add</code> makes the task repeat, on a schedule or after it's done.
       </div>
       <div class="msub">Keyboard</div>
       <div class="cmdref">
@@ -854,7 +911,7 @@
   /* ============ state ============ */
   var S = {
     seq: 1, todos: [], done: [], categories: [], notes: "",
-    cfg: { links: [] },
+    cfg: { links: [], calendar: false },
     ui: defaultUi()
   };
 
@@ -871,6 +928,7 @@
       subs: normSubs(t.subs),
       subsOpen: !!t.subsOpen,
       notes: String(t.notes||""),
+      repeat: normRepeat(t.repeat),
       created: +t.created || Date.now(),
       updated: +t.updated || +t.created || Date.now()
     };
@@ -884,6 +942,18 @@
       subs: normSubs(e.subs),
       notes: String(e.notes||"")
     };
+  }
+  // How often a task repeats, or null. "from" is what the next due date counts from: "due", on a schedule, or
+  // "done", the day it's ticked off. "day" is the day of the month a monthly or yearly schedule keeps to.
+  var REPEAT_UNITS = ["day","week","month","year"];
+  function normRepeat(r){
+    if(!r || typeof r !== "object") return null;
+    var every = parseInt(r.every, 10);
+    if(!(every >= 1) || REPEAT_UNITS.indexOf(r.unit) < 0) return null;
+    var out = { every:Math.min(every, 999), unit:r.unit, from:r.from === "done" ? "done" : "due" };
+    var day = parseInt(r.day, 10);
+    if(day >= 1 && day <= 31) out.day = day;
+    return out;
   }
   // Top-bar shortcuts (none by default). Only a full http(s) address makes a link.
   function defaultLinks(){ return []; }
@@ -929,7 +999,8 @@
   function defaultUi(){
     return { cols:[1.2,1.5,1], collapsed:[false,false,false], sort:"manual", sort2:"none", showTime:true, list:"mine" };
   }
-  // A user's display settings and top-bar shortcuts, as Home Assistant keeps them. Anything missing takes its default.
+  // A user's display settings, top-bar shortcuts and calendar setting, as Home Assistant keeps them. Anything missing
+  // takes its default.
   function adoptPrefs(p){
     p = (p && typeof p === "object") ? p : {};
     var ui = (p.ui && typeof p.ui === "object") ? p.ui : {}, cfg = (p.cfg && typeof p.cfg === "object") ? p.cfg : {};
@@ -947,7 +1018,8 @@
         ? cfg.links.filter(function(l){ return l && typeof l.label === "string" && typeof l.path === "string"; })
             .map(function(l){ return { label:l.label.trim(), path:l.path.trim() }; })
             .filter(function(l){ return l.label && l.path; })
-        : defaultLinks()
+        : defaultLinks(),
+      calendar: cfg.calendar === true   // this person's list on Home Assistant's calendar
     };
   }
 
@@ -1319,6 +1391,48 @@
     }
     return null;
   }
+  // Repeating tasks. Dates are "YYYY-MM-DD" strings, which compare in date order.
+  var UNIT_SHORT = { day:"d", week:"wk", month:"mo", year:"yr" }, UNIT_ONE = { day:"daily", week:"weekly", month:"monthly", year:"yearly" };
+  function repeatShort(r){ return r.every === 1 ? UNIT_ONE[r.unit] : r.every + " " + UNIT_SHORT[r.unit]; }
+  function repeatEvery(r){ return r.every === 1 ? "every " + r.unit : "every " + r.every + " " + r.unit + "s"; }
+  function repeatText(r){ return "Repeats " + repeatEvery(r) + ", " + (r.from === "done" ? "counted from when it's done" : "on a schedule"); }
+  // base moved on by the repeat's interval, so many times over. Months and years keep to day where there is one,
+  // and otherwise to base's day, falling on the last day of shorter months.
+  function repeatStep(base, r, times, day){
+    var p = base.split("-"), y = +p[0], m = +p[1] - 1, d = +p[2], n = r.every * times;
+    if(r.unit === "day") return dateKey(new Date(y, m, d + n).getTime());
+    if(r.unit === "week") return dateKey(new Date(y, m, d + 7*n).getTime());
+    if(r.unit === "month"){ m += n; y += Math.floor(m / 12); m = ((m % 12) + 12) % 12; }
+    else y += n;
+    return dateKey(new Date(y, m, Math.min(day || d, new Date(y, m + 1, 0).getDate())).getTime());
+  }
+  // The due date a repeating task moves to when it's ticked off today. On a schedule, the first date in it after
+  // today, so missed ones don't pile up; after it's done, counted from today.
+  function nextDue(t, today){
+    var r = t.repeat;
+    if(r.from === "done" || !isDate(t.due)) return repeatStep(today, r, 1, null);
+    for(var k = 1; k < 100000; k++){ var d = repeatStep(t.due, r, k, r.day); if(d > today) return d; }
+    return repeatStep(today, r, 1, null);
+  }
+  // A monthly or yearly schedule keeps to its due date's day of the month.
+  function anchorRepeat(t){
+    var r = t.repeat;
+    if(!r) return;
+    if(r.from === "due" && (r.unit === "month" || r.unit === "year") && isDate(t.due)) r.day = +t.due.slice(8);
+    else delete r.day;
+  }
+  // "1w", "3mo", "2d", "1y", "weekly" and the like, after * or ~ in the command bar.
+  function parseRepeat(word){
+    var w = String(word || "").toLowerCase();
+    var named = { daily:["day",1], weekly:["week",1], monthly:["month",1], yearly:["year",1], annually:["year",1],
+                  biweekly:["week",2], fortnightly:["week",2] };
+    if(named[w]) return { every:named[w][1], unit:named[w][0] };
+    var m = w.match(/^(\d{0,3})(d|days?|w|wks?|weeks?|m|mos?|mon|months?|y|yrs?|years?)$/);
+    if(!m) return null;
+    var n = m[1] ? +m[1] : 1;
+    if(n < 1) return null;
+    return { every:n, unit:{ d:"day", w:"week", m:"month", y:"year" }[m[2].charAt(0)] };
+  }
   // A category is stored once, under the name you typed ("Back Yard").
   // Everything else is derived: the token is what you type in the command bar
   // ("Back_Yard"), and the key is what matching compares ("backyard").
@@ -1507,6 +1621,7 @@
     var sub = [];
     var dm = t.due ? dueMeta(t.due) : null;
     if(dm) sub.push('<span class="due ' + dm.cls + '" title="' + esc(dm.title) + '">' + esc(dm.text) + '</span>');
+    if(t.repeat) sub.push('<span class="rbadge" title="' + esc(repeatText(t.repeat)) + '">\u21BB ' + esc(repeatShort(t.repeat)) + '</span>');
     if(t.status === "waiting"){
       var w = "Waiting" + (t.waitingOn ? " on <b>" + esc(t.waitingOn) + "</b>" : "");
       if(t.followUp){
@@ -1700,6 +1815,8 @@
       $("dDue").disabled = !isTodo;
       $("dDue").classList.toggle("empty", !$("dDue").value);
       $("dWaitRow").hidden = !(isTodo && item.status === "waiting");
+      $("dRepRow").hidden = !isTodo;
+      renderRepeatPicker("detail");
       renderSubs();
       if(isTodo){ $("dWaitOn").value = item.waitingOn || ""; $("dFollow").value = item.followUp || ""; }
       var pickerField = document.querySelector('.cat[data-target="detail"]');
@@ -1902,12 +2019,15 @@
 
   /* ============ actions ============ */
   function doFlash(id){ flashIds[id] = 1; setTimeout(function(){ delete flashIds[id]; }, 700); }
-  function addTodo(text, category, pri, due){
+  function addTodo(text, category, pri, due, repeat){
     var canon = category ? ensureCategory(category, true) : null;
-    var t = normTodo({ id:S.seq++, text:text, category:canon, pri:pri||"md", due:due||"", created:Date.now() });
+    var t = normTodo({ id:S.seq++, text:text, category:canon, pri:pri||"md", due:due||"", repeat:repeat||null,
+                       created:Date.now() });
+    if(t.repeat && t.repeat.from === "due" && !t.due) t.due = todayStr();   // a schedule starts somewhere
+    anchorRepeat(t);
     S.todos.unshift(t);
     doFlash(t.id); save(); syncLists();
-    toast("Task #" + t.id + " added" + (canon ? " for " + canon : ""), "info");
+    toast("Task #" + t.id + " added" + (canon ? " for " + canon : "") + (t.repeat ? ", repeating " + repeatShort(t.repeat) : ""), "info");
     return t;
   }
   function addCompleted(text, category, ts, notes){
@@ -1920,6 +2040,7 @@
   }
   function completeTodo(id){
     var t = findTodo(id); if(!t) return;
+    if(t.repeat){ completeRepeat(t); return; }
     var idx = S.todos.indexOf(t);
     S.todos = S.todos.filter(function(x){ return x.id !== id; });
     var entry = normDone({ id:t.id, category:t.category, text:t.text, ts:Date.now(), notes:t.notes, subs:t.subs });
@@ -1932,6 +2053,34 @@
       if(selected && selected.id === id) selected = { type:"todo", id:id };
       save(); syncAll();
     });
+  }
+  // A repeating task goes to the log under a new number, and stays open with its next due date and its side tasks
+  // unticked.
+  function completeRepeat(t){
+    var keep = ["due","subs","status","waitingOn","followUp","updated","repeat"], before = {};
+    keep.forEach(function(k){ before[k] = clone(t[k]); });
+    var entry = normDone({ id:S.seq++, category:t.category, text:t.text, ts:Date.now(), notes:t.notes, subs:clone(t.subs) });
+    S.done.push(entry);
+    t.due = nextDue(t, todayStr());
+    anchorRepeat(t);
+    t.subs.forEach(function(sb){ sb.done = false; });
+    t.status = "open"; t.waitingOn = ""; t.followUp = "";
+    t.updated = Date.now();
+    doFlash(t.id); doFlash(entry.id); save(); syncAll();
+    toast("Completed #" + t.id + ", next due " + shortDate(dateToTs(t.due)), "ok", function(){
+      S.done = S.done.filter(function(x){ return x !== entry; });
+      keep.forEach(function(k){ t[k] = before[k]; });
+      save(); syncAll();
+    });
+  }
+  function setRepeat(id, r){
+    var t = findTodo(id); if(!t) return;
+    t.repeat = normRepeat(r);
+    if(t.repeat && t.repeat.from === "due" && !t.due) t.due = todayStr();
+    anchorRepeat(t);
+    t.updated = Date.now();
+    save(); syncAll();
+    toast(t.repeat ? "#" + id + " " + repeatText(t.repeat).replace(/^R/, "r") : "#" + id + " no longer repeats", "info");
   }
   function delTodo(id){
     var t = findTodo(id); if(!t) return;
@@ -1967,6 +2116,7 @@
   function setDue(id, due){
     var t = findTodo(id); if(!t) return;
     t.due = due || ""; t.updated = Date.now();
+    anchorRepeat(t);
     save(); syncAll();
     toast(due ? "#" + id + " due " + due : "Due date cleared on #" + id, "info");
   }
@@ -2041,7 +2191,7 @@
 
   /* ============ command bar ============ */
   function parseTags(tokens){
-    var category = null, pri = null, due = null, rest = [];
+    var category = null, pri = null, due = null, repeat = null, rest = [];
     tokens.forEach(function(tok){
       var t = tok;
       if(t.charAt(0) === "!"){ var bare = t.replace(/^!+/, ""); pri = "hi"; t = bare; }
@@ -2051,9 +2201,13 @@
         var w = parseWhen(t.slice(1));
         if(w !== null){ due = w; return; }
       }
+      if((t.charAt(0) === "*" || t.charAt(0) === "~") && t.length > 1){
+        var r = parseRepeat(t.slice(1));
+        if(r){ r.from = t.charAt(0) === "~" ? "done" : "due"; repeat = r; return; }
+      }
       rest.push(t);
     });
-    return { category:category, pri:pri, due:due, text:rest.join(" ").trim() };
+    return { category:category, pri:pri, due:due, repeat:repeat, text:rest.join(" ").trim() };
   }
   function runCommand(line){
     line = String(line).trim();
@@ -2062,13 +2216,13 @@
     var ALIAS = { did:"log", record:"log", "new":"add", kill:"done", complete:"done", x:"done", fin:"done",
                   "?":"help", man:"help", hold:"wait", block:"wait",
                   unwait:"resume", active:"resume", priority:"pri", search:"find", filter:"find",
-                  step:"sub", subtask:"sub" };
+                  step:"sub", subtask:"sub", every:"repeat", recur:"repeat" };
     cmd = ALIAS[cmd] || cmd;
 
     if(cmd === "add"){
       var p = parseTags(args);
       if(!p.text){ toast("Try: add Schedule furnace service", "err"); return; }
-      addTodo(p.text, p.category || pick.todo, p.pri || "md", p.due || "");
+      addTodo(p.text, p.category || pick.todo, p.pri || "md", p.due || "", p.repeat);
     }
     else if(cmd === "log"){
       var q = parseTags(args);
@@ -2105,6 +2259,15 @@
       var tt = findTodo(pid); tt.pri = mapl[lvl]; tt.updated = Date.now();
       save(); syncAll(); toast("#" + pid + " set to " + PLABEL[tt.pri].toLowerCase(), "info");
     }
+    else if(cmd === "repeat"){
+      var rpid = parseInt(args[0], 10), how = (args[1] || "").toLowerCase();
+      if(isNaN(rpid) || !findTodo(rpid)){ toast("No open task #" + (args[0] || ""), "err"); return; }
+      if(how === "none" || how === "off" || how === "never"){ setRepeat(rpid, null); return; }
+      var lead = how.charAt(0), rr = parseRepeat(lead === "*" || lead === "~" ? how.slice(1) : how);
+      if(!rr){ toast("Try: repeat " + rpid + " *1w · ~3mo · none", "err"); return; }
+      rr.from = lead === "~" ? "done" : "due";
+      setRepeat(rpid, rr);
+    }
     else if(cmd === "sub"){
       var sid = parseInt(args[0], 10);
       var owner = isNaN(sid) ? null : (findTodo(sid) || findDone(sid));
@@ -2127,6 +2290,82 @@
     else if(cmd === "help"){ openModal("helpModal"); }
     else if(cmd === "clear"){ filterQ = ""; clearSelection(); syncLists(); }
     else toast('Unknown command "' + parts[0] + '" — type help', "err");
+  }
+
+  /* ============ repeat pickers ============ */
+  // The ↻ button beside the due date when adding a task, and the Repeat row in a task's details.
+  var REPEAT_HINT = { due:"Counted from the due date, so it keeps to its days even when it's done late.",
+                      done:"Counted from the day it's ticked off." };
+  var repeatPickers = {}, addRepeat = null;
+  function repeatPickerHtml(){
+    return '<button type="button" class="rpick-btn"></button>' +
+      '<div class="rpick-pop">' +
+        '<div class="rpick-line"><span>Every</span><input type="number" class="field rpick-n" min="1" max="999" value="1">' +
+          '<select class="field rpick-unit"><option value="day">days</option><option value="week">weeks</option>' +
+          '<option value="month">months</option><option value="year">years</option></select></div>' +
+        '<div class="seg rpick-from"><button type="button" data-v="due">On a schedule</button>' +
+          '<button type="button" data-v="done">After it\'s done</button></div>' +
+        '<div class="rpick-hint"></div>' +
+        '<div class="rpick-acts"><button type="button" class="ghost rpick-clear">Doesn\'t repeat</button>' +
+          '<button type="button" class="btn sm rpick-set">Set</button></div>' +
+      '</div>';
+  }
+  function closeRepeatPickers(){
+    Array.prototype.forEach.call(document.querySelectorAll(".rpick.open"), function(el){ el.classList.remove("open"); });
+  }
+  function renderRepeatPicker(target){
+    var pk = repeatPickers[target];
+    if(!pk) return;
+    var r = pk.get(), btn = pk.el.querySelector(".rpick-btn");
+    btn.textContent = pk.long ? (r ? "\u21BB " + repeatEvery(r).replace(/^e/, "E") + (r.from === "done" ? ", after it's done" : ", on a schedule") : "Doesn't repeat")
+                              : "\u21BB" + (r ? " " + repeatShort(r) : "");
+    btn.classList.toggle("on", !!r);
+    btn.title = r ? repeatText(r) : "Repeat";
+  }
+  // Opens below its button, or above it near the bottom of the screen, and clear of the panel's edges.
+  function placeRepeatPop(el){
+    var pop = el.querySelector(".rpick-pop"), r = el.querySelector(".rpick-btn").getBoundingClientRect();
+    var w = pop.offsetWidth, h = pop.offsetHeight, below = r.bottom + 5;
+    pop.style.left = Math.max(8, Math.min(r.left, window.innerWidth - w - 8)) + "px";
+    pop.style.top = (below + h > window.innerHeight - 8 && r.top - 5 - h >= 8 ? r.top - 5 - h : below) + "px";
+  }
+  function setupRepeatPicker(target, get, set, long){
+    var el = document.querySelector('.rpick[data-target="' + target + '"]');
+    el.innerHTML = repeatPickerHtml();
+    var n = el.querySelector(".rpick-n"), unit = el.querySelector(".rpick-unit"), from = "due";
+    function showFrom(){
+      Array.prototype.forEach.call(el.querySelectorAll(".rpick-from button"), function(b){
+        b.classList.toggle("on", b.getAttribute("data-v") === from);
+      });
+      el.querySelector(".rpick-hint").textContent = REPEAT_HINT[from];
+    }
+    function commit(){
+      var every = parseInt(n.value, 10);
+      set({ every:Math.min(every >= 1 ? every : 1, 999), unit:unit.value, from:from });
+      el.classList.remove("open");
+    }
+    el.querySelector(".rpick-btn").addEventListener("click", function(){
+      var open = !el.classList.contains("open");
+      closeRepeatPickers();
+      if(!open) return;
+      var r = get();
+      n.value = r ? r.every : 1;
+      unit.value = r ? r.unit : "week";
+      from = r ? r.from : "due";
+      showFrom();
+      el.classList.add("open");
+      placeRepeatPop(el);
+      n.focus(); n.select();
+    });
+    el.querySelector(".rpick-from").addEventListener("click", function(e){
+      var b = e.target.closest("button[data-v]");
+      if(b){ from = b.getAttribute("data-v"); showFrom(); }
+    });
+    n.addEventListener("keydown", function(e){ if(e.key === "Enter"){ e.preventDefault(); commit(); } });
+    el.querySelector(".rpick-set").addEventListener("click", commit);
+    el.querySelector(".rpick-clear").addEventListener("click", function(){ set(null); el.classList.remove("open"); });
+    repeatPickers[target] = { el:el, get:get, long:long };
+    renderRepeatPicker(target);
   }
 
   /* ============ modals ============ */
@@ -2232,12 +2471,21 @@
     function syncTodoDue(){ todoDue.classList.toggle("empty", !todoDue.value); }
     todoDue.addEventListener("change", syncTodoDue); todoDue.addEventListener("input", syncTodoDue); syncTodoDue();
 
+    window.addEventListener("resize", function(){
+      Array.prototype.forEach.call(document.querySelectorAll(".rpick.open"), placeRepeatPop);
+    });
+    setupRepeatPicker("todo", function(){ return addRepeat; },
+                      function(r){ addRepeat = r; renderRepeatPicker("todo"); }, false);
+    setupRepeatPicker("detail", function(){ var t = selectedTodo(); return t ? t.repeat : null; },
+                      function(r){ var t = selectedTodo(); if(t) setRepeat(t.id, r); }, true);
+
     function submitTodo(){
       var raw = $("todoText").value.trim();
       if(!raw){ $("todoText").focus(); return; }
       var p = parseTags(raw.split(/\s+/));
-      addTodo(p.text || raw, p.category || pick.todo, p.pri || "md", p.due || todoDue.value || "");
+      addTodo(p.text || raw, p.category || pick.todo, p.pri || "md", p.due || todoDue.value || "", p.repeat || addRepeat);
       $("todoText").value = ""; todoDue.value = ""; syncTodoDue(); $("todoText").focus();
+      addRepeat = null; renderRepeatPicker("todo");
     }
     function submitLog(){
       var raw = $("logText").value.trim();
@@ -2379,6 +2627,7 @@
     $("dDue").addEventListener("change", function(){
       var t = selectedTodo(); if(!t) return;
       t.due = isDate($("dDue").value) ? $("dDue").value : "";
+      anchorRepeat(t);
       t.updated = Date.now(); save(); syncLists(); renderNotes();
     });
     $("dWaitOn").addEventListener("input", function(){
@@ -2567,14 +2816,16 @@
     $("cfgAddLink").addEventListener("click", function(){ $("cfgLinks").appendChild(linkRow("", "")); });
 
     $("mSettings").addEventListener("click", function(){
+      $("cfgCalendar").checked = !!S.cfg.calendar;
       fillLinkEditor(S.cfg.links);
       if(!S.cfg.links.length) $("cfgLinks").appendChild(linkRow("", ""));
       openModal("cfgModal");
     });
     $("cfgSave").addEventListener("click", function(){
       S.cfg.links = readLinkEditor();
+      S.cfg.calendar = $("cfgCalendar").checked;
       save(); syncAll(); closeModal("cfgModal");
-      toast("Shortcuts saved", "ok");
+      toast("Settings saved", "ok");
     });
 
     /* modals */
@@ -2592,6 +2843,7 @@
       if(e.key === "Escape"){
         if(anyModalOpen()){ closeAllModals(); return; }
         if(document.querySelector(".cat.open")){ openPicker(document.querySelector(".cat.open"), false); return; }
+        if(document.querySelector(".rpick.open")){ closeRepeatPickers(); return; }
         if(session.classList.contains("open")){ session.classList.remove("open"); return; }
         if(selected && !isTyping(e.target)) clearSelection();
         return;
@@ -2613,6 +2865,7 @@
         Array.prototype.forEach.call(document.querySelectorAll(".cat.open"), function(f){ f.classList.remove("open"); });
       }
       if(!e.target.closest(".session")) session.classList.remove("open");
+      if(!e.target.closest(".rpick")) closeRepeatPickers();
     });
 
     // Leaving the page sends anything still waiting, such as notes typed a moment ago, then lets go of the
@@ -2643,7 +2896,7 @@
 
   window.HOMETODO = { state:S, parseWhen:parseWhen, run:runCommand,
     parseTags:parseTags, categoryToken:categoryToken, categoryKey:categoryKey, theme:applyTheme,
-    addSub:addSub, subStats:subStats,
+    addSub:addSub, subStats:subStats, nextDue:nextDue, parseRepeat:parseRepeat,
     sync:{ changes:listChanges, pending:hasPending, save:save, switchList:switchList,
       active:function(){ return active; }, online:function(){ return online; }, booted:function(){ return booted; },
       inflight:function(){ return inflight; } } };
