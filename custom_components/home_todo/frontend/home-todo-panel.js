@@ -3,6 +3,7 @@
 // opens Home Assistant's sidebar when it's hidden, as on a phone.
 
 const VERSION = new URL(import.meta.url).search; // ?v=…, so an update is fetched afresh
+const VERSION_NUMBER = new URL(import.meta.url).searchParams.get("v") || "";
 const PAGE = new URL("home-todo.html" + VERSION, import.meta.url);
 const MENU_ICON =
   '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" ' +
@@ -29,6 +30,7 @@ class HomeTodoPanel extends HTMLElement {
   }
 
   get hass() { return this._hass; }
+  get version() { return VERSION_NUMBER; } // the page stops if Home Assistant is running another version
   set hass(hass) {
     this._hass = hass;
     this._showMenu();

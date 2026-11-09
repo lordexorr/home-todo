@@ -17,9 +17,10 @@ type Watcher = Callable[[set[str], bool], None]  # the lists that changed, and w
 
 
 class HomeTodo:
-    def __init__(self, hass: HomeAssistant, name: str) -> None:
+    def __init__(self, hass: HomeAssistant, name: str, version: str) -> None:
         self.hass = hass
         self.name = name
+        self.version = version  # a page from another version stops and asks to be reloaded
         self._store: Store[dict[str, Any]] = Store(hass, STORAGE_VERSION, STORAGE_KEY)
         self.doc: dict[str, Any] = model.new_doc()
         self._listeners: dict[object, tuple[str, Listener]] = {}
@@ -78,9 +79,9 @@ class HomeTodo:
             "initial": True,
             "rev": self.doc["rev"],
             "name": self.name,
+            "version": self.version,
             "user": {"id": user.id, "name": user.name or "", "is_admin": user.is_admin},
             "lists": {lid: self.doc["lists"][lid] for lid in (model.FAMILY, user.id)},
-            "categories": self.doc["categories"],
             "prefs": self.doc["prefs"].get(user.id, {}),
         }
 
@@ -88,10 +89,9 @@ class HomeTodo:
     def apply(self, list_id: str, changes: dict[str, Any]) -> dict[str, Any]:
         if list_id != model.FAMILY:
             model.ensure_personal(self.doc, list_id)
-        categories = list(self.doc["categories"])
         remap = model.apply_changes(self.doc, list_id, changes)
         self._changed()
-        self._publish({list_id}, categories=self.doc["categories"] != categories)
+        self._publish({list_id})
         self._tell({list_id}, calendars=False)
         return {"rev": self.doc["rev"], "remap": remap}
 
@@ -116,16 +116,13 @@ class HomeTodo:
                 watcher(lists, calendars)
 
     @callback
-    def _publish(self, lists: set[str], categories: bool = False, prefs_for: str | None = None) -> None:
-        """Sends each open page what changed that it shows. Categories go to everyone when they change, since every
-        list shares them."""
+    def _publish(self, lists: set[str], prefs_for: str | None = None) -> None:
+        """Sends each open page what changed that it shows."""
         for user_id, listener in list(self._listeners.values()):
             payload: dict[str, Any] = {"rev": self.doc["rev"]}
             shown = {lid: self.doc["lists"][lid] for lid in lists if self.can_use(user_id, lid)}
             if shown:
                 payload["lists"] = shown
-            if shown or categories:
-                payload["categories"] = self.doc["categories"]
             if prefs_for == user_id:
                 payload["prefs"] = self.doc["prefs"].get(user_id, {})
             if len(payload) > 1:

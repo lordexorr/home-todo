@@ -33,10 +33,10 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
 
 async def async_setup_entry(hass: HomeAssistant, entry: HomeTodoConfigEntry) -> bool:
     name = entry.options.get(CONF_NAME) or DEFAULT_NAME
-    todo = HomeTodo(hass, name)
+    version = str((await async_get_integration(hass, DOMAIN)).version)
+    todo = HomeTodo(hass, name, version)
     await todo.async_load()
     entry.runtime_data = todo
-    version = str((await async_get_integration(hass, DOMAIN)).version)
     # The page runs in a frame of its own, so its styles and keyboard shortcuts stay apart from Home Assistant's.
     # The version in its address makes browsers fetch it afresh after an update.
     await panel_custom.async_register_panel(

@@ -16,7 +16,7 @@ Home To-Do needs Home Assistant 2026.11 or later, and is installed through its M
 
 **Home To-Do** then appears in the sidebar for every user. **Configure** on its entry changes the name shown at the
 top of the page and in the sidebar, such as "Lowry Home To-Do". The page takes its colors from each person's Home
-Assistant theme, light or dark.
+Assistant theme, light or dark. After an update, a Home To-Do page that was already open asks to be reloaded.
 
 ## Lists
 
@@ -24,8 +24,8 @@ Assistant theme, light or dark.
   Assistant's calendar.
 - **Family** is shared: everyone who uses Home To-Do sees it and can change it.
 
-Switch between them with the buttons beside the logo. Each list has its own tasks, log and scratchpad, and its own
-task numbers. Categories are shared by both.
+Switch between them with the buttons beside the logo. Each list has its own tasks, log, scratchpad, task numbers and
+categories, so categories made on Mine stay private.
 
 ## Repeating tasks
 

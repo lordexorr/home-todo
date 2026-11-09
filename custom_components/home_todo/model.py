@@ -4,13 +4,13 @@ offline.
 Everything is kept in one document:
 
 - lists: "family", shared by everyone, and one list per user, under the user's id.
-- categories: the category names every list shares.
 - prefs: each user's display settings ("ui"), and their top-bar shortcuts and whether their list is on Home
   Assistant's calendar ("cfg").
 - rev: goes up by one with each change.
 
-A list holds its open tasks ("todos"), its completed log ("done"), its scratchpad ("notes"), and "seq", the next task
-number. Task numbers belong to a list, and a task keeps its number when it's completed.
+A list holds its open tasks ("todos"), its completed log ("done"), its scratchpad ("notes"), its category names
+("categories"), and "seq", the next task number. Family's categories are shared, and a personal list's are its owner's
+alone. Task numbers belong to a list, and a task keeps its number when it's completed.
 
 A task can repeat. Ticked off, it goes to the log under a new number and stays open with its next due date. "from"
 says what that's counted from: "due", on a schedule from its due date, or "done", from the day it was ticked off."""
@@ -165,7 +165,7 @@ def norm_done(e: Any, now: int) -> dict:
 
 
 def new_list(list_id: str) -> dict:
-    return {"id": list_id, "seq": 1, "todos": [], "done": [], "notes": ""}
+    return {"id": list_id, "seq": 1, "todos": [], "done": [], "notes": "", "categories": []}
 
 
 def norm_list(raw: Any, list_id: str, now: int) -> dict:
@@ -179,8 +179,11 @@ def norm_list(raw: Any, list_id: str, now: int) -> dict:
             top += 1
             item["id"] = top
         seen.add(item["id"])
+    categories: list[str] = []
+    for name in _list(raw.get("categories")):
+        _add_category(categories, name)
     return {"id": list_id, "seq": max(_int(raw.get("seq")), top + 1), "todos": todos, "done": done,
-            "notes": _text(raw.get("notes"))}
+            "notes": _text(raw.get("notes")), "categories": categories}
 
 
 def norm_prefs(raw: Any) -> dict:
@@ -216,7 +219,17 @@ def norm_prefs(raw: Any) -> dict:
 
 
 def new_doc() -> dict:
-    return {"rev": 0, "lists": {FAMILY: new_list(FAMILY)}, "categories": [], "prefs": {}}
+    return {"rev": 0, "lists": {FAMILY: new_list(FAMILY)}, "prefs": {}}
+
+
+def _share_out(names: list[str], lists: dict[str, dict]) -> None:
+    """Categories from before each list had its own: each goes to the lists with a task or log entry in it, and one
+    that nothing uses goes to Family."""
+    for name in names:
+        using = [lst for lst in lists.values()
+                 if any(_same_category(x["category"] or "", name) for x in lst["todos"] + lst["done"])]
+        for lst in using or [lists[FAMILY]]:
+            _add_category(lst["categories"], name)
 
 
 def norm_doc(raw: Any) -> dict:
@@ -226,11 +239,12 @@ def norm_doc(raw: Any) -> dict:
     lists = {lid: norm_list(lst, lid, now) for lid, lst in _dict(raw.get("lists")).items()
              if isinstance(lid, str) and lid}
     lists.setdefault(FAMILY, new_list(FAMILY))
-    categories: list[str] = []
+    shared: list[str] = []
     for name in _list(raw.get("categories")):
-        _add_category(categories, name)
+        _add_category(shared, name)
+    _share_out(shared, lists)
     prefs = {uid: norm_prefs(p) for uid, p in _dict(raw.get("prefs")).items() if isinstance(uid, str)}
-    return {"rev": max(_int(raw.get("rev")), 0), "lists": lists, "categories": categories, "prefs": prefs}
+    return {"rev": max(_int(raw.get("rev")), 0), "lists": lists, "prefs": prefs}
 
 
 def ensure_personal(doc: dict, user_id: str) -> bool:
@@ -264,7 +278,9 @@ def apply_changes(doc: dict, list_id: str, changes: Any, now: int | None = None)
     both stay. A change to a task someone else has since deleted or completed is dropped.
 
     Returns the task numbers that had to change: when two pages add a task with the same number at once, the second
-    one gets the list's next number."""
+    one gets the list's next number.
+
+    A field an edit leaves out keeps what it was, so a page from before the field existed doesn't erase it."""
     now = now or now_ms()
     lst = doc["lists"][list_id]
     changes = _dict(changes)
@@ -278,10 +294,8 @@ def apply_changes(doc: dict, list_id: str, changes: Any, now: int | None = None)
         part, items = parts[key], lst[key]
         where = {x["id"]: i for i, x in enumerate(items)}
         for raw in _list(part.get("update")):
-            if isinstance(raw, dict):
-                item = norm(raw, now)
-                if item["id"] in where:
-                    items[where[item["id"]]] = item
+            if isinstance(raw, dict) and (item_id := _int(raw.get("id"))) in where:
+                items[where[item_id]] = norm({**items[where[item_id]], **raw}, now)
         for raw in _list(part.get("add")):
             if not isinstance(raw, dict):
                 continue
@@ -302,9 +316,9 @@ def apply_changes(doc: dict, list_id: str, changes: Any, now: int | None = None)
         lst["notes"] = changes["notes"]
     cats = _dict(changes.get("categories"))
     for name in _list(cats.get("remove")):
-        doc["categories"] = [c for c in doc["categories"] if c != name]
+        lst["categories"] = [c for c in lst["categories"] if c != name]
     for name in _list(cats.get("add")):
-        _add_category(doc["categories"], name)
+        _add_category(lst["categories"], name)
     return {key: {str(old): new for old, new in m.items()} for key, m in remap.items() if m}
 
 

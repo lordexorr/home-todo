@@ -788,7 +788,7 @@
 </footer>
 
 <div class="toasts" id="toasts"></div>
-<div class="connbox" id="connBox"><div class="conncard"><span class="dot warn"></span><span id="connTxt">Connecting to Home Assistant…</span></div></div>
+<div class="connbox" id="connBox"><div class="conncard"><span class="dot warn"></span><span id="connTxt">Connecting to Home Assistant…</span><button class="btn sm" id="connReload" hidden>Reload</button></div></div>
 
 <!-- settings -->
 <div class="modal" id="cfgModal">
@@ -842,7 +842,7 @@
         <b>Mine</b> is your own list, and only you see it, unless you put it on Home Assistant's calendar under
         Settings. <b>Family</b> is shared: everyone who uses Home To-Do
         sees it and can change it. Switch between them with the buttons beside the logo. Each list has its own
-        tasks, log and scratchpad, and its own task numbers; categories are shared by both.
+        tasks, log, scratchpad, task numbers and categories, so categories made on Mine stay yours.
       </div>
       <div class="msub">Side tasks</div>
       <div class="mnote" style="margin-top:0;padding-top:0;border:0">
@@ -913,7 +913,7 @@
   var $ = function(id){ return document.getElementById(id); };
   /* ============ state ============ */
   var S = {
-    seq: 1, todos: [], done: [], categories: [], notes: "",
+    seq: 1, todos: [], done: [], categories: [], notes: "",          // the list on screen
     cfg: { links: defaultLinks(), calendar: false, linksSaved: false },
     ui: defaultUi()
   };
@@ -962,9 +962,12 @@
   function defaultLinks(){
     return [{ label:"Trash schedule", path:"https://www.google.com/search?q=trash+pickup+schedule+near+me" }];
   }
+  // A shortcut's address, with https:// added when it's left off. Anything that isn't a web address gives "".
   function linkUrl(path){
     var p = String(path == null ? "" : path).trim();
-    return /^https?:\/\//i.test(p) ? p : "";
+    if(/^https?:\/\/\S+$/i.test(p)) return p;
+    if(!p || /\s/.test(p) || /^[a-z][a-z0-9+\-]*:(?!\d)/i.test(p)) return "";   // mailto:, javascript: and the like
+    return "https://" + p.replace(/^\/+/, "");
   }
   // Side tasks live inside their parent, so their ids only need to be unique there.
   function normSubs(v){
@@ -1038,8 +1041,9 @@
   var conn = null, unsub = null, me = null, listening = false;
   var booted = false, online = false, failed = false, inflight = 0, latest = null, connMsg = "", leaving = false;
   var active = "";                                  // id of the list on screen
-  var sent = { decks:{}, cats:[], prefs:"" };       // what this page has sent: edits are measured from here
-  var acked = { decks:{}, cats:[], prefs:"" };      // what Home Assistant has confirmed it has
+  var sent = { decks:{}, prefs:"" };       // what this page has sent: edits are measured from here
+  var acked = { decks:{}, prefs:"" };      // what Home Assistant has confirmed it has
+  var outdated = false;                     // Home Assistant is running another version of Home To-Do
   var ERR_CONNECTION_LOST = 3;                      // home-assistant-js-websocket's code for a dropped connection
 
   function clone(v){ return JSON.parse(JSON.stringify(v)); }
@@ -1050,11 +1054,14 @@
       seq: +d.seq || 1,
       todos: (Array.isArray(d.todos) ? d.todos : []).map(normTodo),
       done: (Array.isArray(d.done) ? d.done : []).map(normDone),
-      notes: typeof d.notes === "string" ? d.notes : ""
+      notes: typeof d.notes === "string" ? d.notes : "",
+      categories: (Array.isArray(d.categories) ? d.categories : []).filter(function(c){ return typeof c === "string" && c; })
     };
   }
   function listId(kind){ return kind === "family" ? "family" : (me ? me.id : ""); }
-  function deckNow(){ return { id:active, seq:S.seq, todos:clone(S.todos), done:clone(S.done), notes:S.notes }; }
+  function deckNow(){
+    return { id:active, seq:S.seq, todos:clone(S.todos), done:clone(S.done), notes:S.notes, categories:S.categories.slice() };
+  }
   // keep: the same list again, from Home Assistant. Its tasks are updated in place, so anything still holding one,
   // such as an Undo, keeps working.
   function loadActive(keep){
@@ -1062,6 +1069,7 @@
     S.todos = keep ? reuse(S.todos, clone(d.todos)) : clone(d.todos);
     S.done = keep ? reuse(S.done, clone(d.done)) : clone(d.done);
     S.notes = d.notes;
+    S.categories = d.categories.slice();
     S.todos.concat(S.done).forEach(function(x){ if(x.id > maxId) maxId = x.id; });
     S.seq = Math.max(d.seq, maxId + 1);
   }
@@ -1099,8 +1107,8 @@
     if(t){ ch.todos = t; any = true; }
     if(e){ ch.done = e; any = true; }
     if(S.notes !== d.notes){ ch.notes = S.notes; any = true; }
-    var add = S.categories.filter(function(c){ return sent.cats.indexOf(c) < 0; });
-    var rem = sent.cats.filter(function(c){ return S.categories.indexOf(c) < 0; });
+    var add = S.categories.filter(function(c){ return d.categories.indexOf(c) < 0; });
+    var rem = d.categories.filter(function(c){ return S.categories.indexOf(c) < 0; });
     if(add.length || rem.length){ ch.categories = { add:add, remove:rem }; any = true; }
     return any ? ch : null;
   }
@@ -1113,10 +1121,10 @@
     if(!booted || !online){ setSyncUI(); return; }
     var ch = listChanges();
     if(ch){
-      var deck = deckNow(), cats = S.categories.slice(), id = active;
-      sent.decks[id] = deck; sent.cats = cats;
+      var deck = deckNow(), id = active;
+      sent.decks[id] = deck;
       send({ type:"home_todo/apply", list_id:id, changes:ch }, function(res){
-        acked.decks[id] = deck; acked.cats = cats;
+        acked.decks[id] = deck;
         if(res && res.remap) remapIds(id, res.remap);
       });
     }
@@ -1176,6 +1184,13 @@
     if(!ev || typeof ev !== "object") return;
     if(ev.closed){ online = false; latest = null; setSyncUI(); setTimeout(resync, 2000); return; }
     if(ev.initial){
+      if(ev.version && HOST && HOST.version && ev.version !== HOST.version){
+        // Home To-Do was updated while this page was open. Its rules are out of date, so it stops editing.
+        outdated = true; online = false; latest = null;
+        connMsg = "Home To-Do has been updated. Reload to use the new version.";
+        disconnect(); setSyncUI();
+        return;
+      }
       me = ev.user || me;
       connMsg = "";
       setName(ev.name);
@@ -1187,7 +1202,7 @@
   }
   function mergeEvents(a, b){
     if(!a) return b;
-    var out = { lists:{}, categories: b.categories || a.categories, prefs: b.prefs || a.prefs };
+    var out = { lists:{}, prefs: b.prefs || a.prefs };
     Object.keys(a.lists || {}).forEach(function(k){ out.lists[k] = a.lists[k]; });
     Object.keys(b.lists || {}).forEach(function(k){ out.lists[k] = b.lists[k]; });
     return out;
@@ -1202,10 +1217,6 @@
       sent.decks[id] = d; acked.decks[id] = clone(d);
       if(id === active) loadActive(true);
     });
-    if(Array.isArray(ev.categories)){
-      var cats = ev.categories.filter(function(c){ return typeof c === "string" && c; });
-      S.categories = cats.slice(); sent.cats = cats.slice(); acked.cats = cats.slice();
-    }
     if(ev.prefs){
       var was = prefsNow();
       adoptPrefs(ev.prefs);
@@ -1223,8 +1234,6 @@
       var d = normDeck(ev.lists[id]);
       sent.decks[id] = d; acked.decks[id] = clone(d);
     });
-    var cats = (Array.isArray(ev.categories) ? ev.categories : []).filter(function(c){ return typeof c === "string" && c; });
-    S.categories = cats.slice(); sent.cats = cats.slice(); acked.cats = cats.slice();
     adoptPrefs(ev.prefs);
     sent.prefs = acked.prefs = prefsNow();
     active = listId(S.ui.list);
@@ -1262,6 +1271,7 @@
     active = id; S.ui.list = kind;
     selected = null; editing = null;
     $("toasts").textContent = "";             // an Undo for the other list mustn't act on this one
+    setPick("todo", null); setPick("log", null);   // categories belong to their list
     loadActive();
     save();                                   // remembers which list was open
     renderListSeg(); syncAll();
@@ -1318,6 +1328,7 @@
     else { dot.classList.add("live"); txt.textContent = "Saved"; }
     $("sessionBtn").title = online ? "Saved in Home Assistant" : "Not connected to Home Assistant";
     $("connBox").hidden = booted && online;
+    $("connReload").hidden = !outdated;
     $("connTxt").textContent = connMsg || (booted ? "Disconnected from Home Assistant. Reconnecting…" : "Connecting to Home Assistant…");
   }
 
@@ -2495,6 +2506,7 @@
       addRepeat = null; renderRepeatPicker("todo");
     }
     function submitLog(){
+      rollLogDate();
       var raw = $("logText").value.trim();
       if(!raw){ $("logText").focus(); return; }
       var p = parseTags(raw.split(/\s+/));
@@ -2513,6 +2525,15 @@
       logDate.classList.toggle("past", past);
       dateReset.hidden = !past;
     }
+    // A page left open overnight moves the log's date on to the new day, unless another day was picked.
+    var logDay = todayStr();
+    function rollLogDate(){
+      var today = todayStr();
+      if(today === logDay) return;
+      if(logDate.value === logDay) logDate.value = today;
+      logDay = today;
+      syncLogDate();
+    }
     logDate.addEventListener("change", syncLogDate);
     logDate.addEventListener("input", syncLogDate);
     dateReset.addEventListener("click", function(){ logDate.value = todayStr(); syncLogDate(); $("logText").focus(); });
@@ -2529,13 +2550,17 @@
     $("exportBtn").addEventListener("click", exportTxt);
 
     /* row interaction */
+    var ticking = {};
     function listClick(e){
       if(justDragged){ justDragged = false; return; }
       var t;
       if((t = e.target.closest("[data-check]"))){
         var row = t.closest(".row"), cid = +t.getAttribute("data-check");
+        if(ticking[cid]) return;                // a double tap completes it once
+        ticking[cid] = true;
         row.classList.add("done-anim");
         setTimeout(function(){ completeTodo(cid); }, 190);
+        setTimeout(function(){ delete ticking[cid]; }, 800);
         return;
       }
       if((t = e.target.closest("[data-subtoggle]"))){
@@ -2829,11 +2854,15 @@
       openModal("cfgModal");
     });
     $("cfgSave").addEventListener("click", function(){
-      S.cfg.links = readLinkEditor();
+      var links = readLinkEditor(), skipped = links.filter(function(l){ return !linkUrl(l.path); });
+      S.cfg.links = links.filter(function(l){ return linkUrl(l.path); })
+                         .map(function(l){ return { label:l.label, path:linkUrl(l.path) }; });
       S.cfg.linksSaved = true;
       S.cfg.calendar = $("cfgCalendar").checked;
       save(); syncAll(); closeModal("cfgModal");
-      toast("Settings saved", "ok");
+      if(skipped.length) toast("Settings saved, without " + skipped.map(function(l){ return l.label; }).join(", ") +
+                               ": a shortcut needs a web address", "warn");
+      else toast("Settings saved", "ok");
     });
 
     /* modals */
@@ -2889,7 +2918,9 @@
       var d = new Date();
       $("clock").textContent = p2(d.getHours()) + ":" + p2(d.getMinutes());
       $("today").textContent = WKN[d.getDay()] + " " + MON[d.getMonth()] + " " + d.getDate();
+      rollLogDate();
     }
+    clockTick = tick;
     tick(); setInterval(tick, 20000);
     setInterval(function(){ if(!editing && !isDragging && document.activeElement !== notesEl) syncLists(); }, 60000);
 
@@ -2899,12 +2930,14 @@
     if(window.innerWidth > 1020) setTimeout(function(){ $("logText").focus(); }, 120);
   }
 
+  var clockTick = null;
   if(document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot);
   else boot();
 
   window.HOMETODO = { state:S, parseWhen:parseWhen, run:runCommand,
     parseTags:parseTags, categoryToken:categoryToken, categoryKey:categoryKey, theme:applyTheme,
-    addSub:addSub, subStats:subStats, nextDue:nextDue, parseRepeat:parseRepeat,
+    addSub:addSub, subStats:subStats, nextDue:nextDue, parseRepeat:parseRepeat, linkUrl:linkUrl,
+    tick:function(){ if(clockTick) clockTick(); },
     sync:{ changes:listChanges, pending:hasPending, save:save, switchList:switchList,
       active:function(){ return active; }, online:function(){ return online; }, booted:function(){ return booted; },
       inflight:function(){ return inflight; } } };

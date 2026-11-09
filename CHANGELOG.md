@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.3.2
+
+- **Categories belong to their list:** each list has its own categories, so ones made on Mine no longer show in anyone else's category picker. Existing categories go to the lists whose tasks or log use them, and any that nothing uses go to Family.
+- **After an update,** a Home To-Do page that was already open says Home To-Do has been updated and offers to reload, instead of carrying on with the old version. Edits from an older page no longer erase what it doesn't know about, such as a task's repeat.
+- **Fixes:**
+  - A quick double tap on a repeating task's tick completed it twice.
+  - On a page left open overnight, the date beside "Log something you did" stayed on the day before.
+  - A shortcut typed without `https://` never appeared in the top bar. It's now added, and Settings says when a shortcut isn't a web address, such as `mailto:`, and isn't kept.
+
 ## 0.3.1
 
 - **An example shortcut:** the top bar starts with a **Trash schedule** shortcut, so it's clear what shortcuts are for. Change it to your town's pickup calendar under **Settings**, or remove it there and it stays removed. Everyone who hasn't saved their own shortcuts yet sees it.
