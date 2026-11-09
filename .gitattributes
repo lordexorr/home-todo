@@ -1,0 +1,2 @@
+# Home Assistant runs on Linux, so keep Unix line endings even when Git runs on Windows.
+* text=auto eol=lf

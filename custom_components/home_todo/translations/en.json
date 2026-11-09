@@ -1,0 +1,13 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Home To-Do",
+        "description": "Adds the Home To-Do page to the sidebar, for every user."
+      }
+    },
+    "abort": {
+      "single_instance_allowed": "Home To-Do is already set up."
+    }
+  }
+}
