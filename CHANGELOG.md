@@ -3,8 +3,8 @@
 ## 0.5.0
 
 - **Requests:** a Family task can be for someone, chosen with **For** beside the due date, in the task's details, or with `>Name` in the command bar, such as `add >Col Pick up the dry cleaning ^fri`. The person it's for is told on their phone, and whoever asked is told when it's done. Tasks for you are marked, the **Family** button counts them, and they're on your own calendar if you've turned it on.
-- **Where notifications go:** each person chooses under **Settings**, from the phones with Home Assistant's app and Home Assistant's own notifications. Tapping one on a phone opens Home To-Do.
-- `for # Name` makes an existing Family task a request, and `for # none` takes it off them.
+- **Choosing where you're notified:** in Home To-Do, open the menu beside the clock, choose **Settings**, and pick your phone under **Notify me on**. Everyone picks their own while signed in as themselves. Tapping a notification on your phone opens Home To-Do.
+- **Making an existing task a request:** click a Family task and choose someone under **For** in its details, or choose **Anyone** to take it off them. In the command bar, `for 12 Colleen` and `for 12 none` do the same for task #12.
 
 ## 0.4.0
 
