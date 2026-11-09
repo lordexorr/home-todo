@@ -9,5 +9,19 @@
     "abort": {
       "single_instance_allowed": "Home To-Do is already set up."
     }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Home To-Do",
+        "description": "Removing Home To-Do keeps every list in `.storage/home_todo`, so adding it again brings them back. To delete the lists for good, delete that file as well.",
+        "data": {
+          "name": "Name"
+        },
+        "data_description": {
+          "name": "Shown at the top of the page and in the sidebar, for everyone. For example, Lowry Home To-Do."
+        }
+      }
+    }
   }
 }

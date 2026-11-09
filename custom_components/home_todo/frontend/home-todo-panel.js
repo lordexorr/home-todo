@@ -18,7 +18,11 @@ class HomeTodoPanel extends HTMLElement {
   }
 
   get hass() { return this._hass; }
-  set hass(hass) { this._hass = hass; this._showMenu(); }
+  set hass(hass) {
+    this._hass = hass;
+    this._showMenu();
+    if (this.onHass) this.onHass(hass); // the page follows Home Assistant's light/dark setting
+  }
   set narrow(narrow) { this._narrow = Boolean(narrow); this._showMenu(); }
   set panel(panel) { this._panel = panel; }
   set route(route) { this._route = route; }

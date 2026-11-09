@@ -13,7 +13,9 @@ Home To-Do needs Home Assistant 2026.11 or later, and is installed through its M
 3. Restart Home Assistant.
 4. Go to **Settings → Devices & services → Add integration** and choose **Home To-Do**.
 
-**Home To-Do** then appears in the sidebar for every user.
+**Home To-Do** then appears in the sidebar for every user. **Configure** on its entry changes the name shown at the
+top of the page and in the sidebar, such as "Lowry Home To-Do". Light and dark follow each person's Home Assistant
+setting.
 
 ## Lists
 

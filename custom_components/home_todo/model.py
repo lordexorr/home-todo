@@ -5,7 +5,7 @@ Everything is kept in one document:
 
 - lists: "family", shared by everyone, and one list per user, under the user's id.
 - categories: the category names every list shares.
-- prefs: each user's display settings ("ui") and links ("cfg").
+- prefs: each user's display settings ("ui") and top-bar shortcuts ("cfg").
 - rev: goes up by one with each change.
 
 A list holds its open tasks ("todos"), its completed log ("done"), its scratchpad ("notes"), and "seq", the next task
@@ -18,8 +18,8 @@ import time
 from typing import Any
 
 FAMILY = "family"
-THEMES = ("slate", "dim", "dark")
-SORTS = ("manual", "due", "pri", "age")
+SORTS = ("manual", "due", "pri", "cat", "age")  # what tasks are sorted by first
+THEN_SORTS = ("none", "due", "pri", "cat", "age")  # and then by
 LIST_KINDS = ("mine", "family")
 _DATE = re.compile(r"\d{4}-\d{2}-\d{2}")
 
@@ -63,10 +63,6 @@ def _dict(value: Any) -> dict:
 
 def _positive(value: Any) -> bool:
     return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value) and value > 0
-
-
-def norm_ticket(value: Any) -> str:
-    return re.sub(r"\s+", "", _text(value).upper())
 
 
 def category_key(name: str) -> str:
@@ -122,7 +118,6 @@ def norm_todo(t: Any, now: int) -> dict:
         "waitingOn": _text(t.get("waitingOn")),
         "followUp": _date(t.get("followUp")),
         "due": _date(t.get("due")),
-        "ticket": norm_ticket(t.get("ticket")),
         "subs": norm_subs(t.get("subs")),
         "subsOpen": bool(t.get("subsOpen")),
         "notes": _text(t.get("notes")),
@@ -139,7 +134,6 @@ def norm_done(e: Any, now: int) -> dict:
         "text": _text(e.get("text")),
         "category": _text(e.get("category")) or None,
         "ts": _int(e.get("ts")) or now,
-        "ticket": norm_ticket(e.get("ticket")),
         "subs": norm_subs(e.get("subs")),
         "notes": _text(e.get("notes")),
     }
@@ -165,7 +159,7 @@ def norm_list(raw: Any, list_id: str, now: int) -> dict:
 
 
 def norm_prefs(raw: Any) -> dict:
-    """A user's display settings and links, keeping only values the page can use."""
+    """A user's display settings and top-bar shortcuts, keeping only values the page can use."""
     raw = _dict(raw)
     ui_in, cfg_in = _dict(raw.get("ui")), _dict(raw.get("cfg"))
     ui: dict[str, Any] = {}
@@ -177,16 +171,13 @@ def norm_prefs(raw: Any) -> dict:
         ui["collapsed"] = [bool(c) for c in collapsed]
     if ui_in.get("sort") in SORTS:
         ui["sort"] = ui_in["sort"]
+    if ui_in.get("sort2") in THEN_SORTS:
+        ui["sort2"] = ui_in["sort2"]
     if isinstance(ui_in.get("showTime"), bool):
         ui["showTime"] = ui_in["showTime"]
-    if ui_in.get("theme") in THEMES and ui_in.get("themePick") is True:  # only a theme the user chose
-        ui["theme"] = ui_in["theme"]
-        ui["themePick"] = True
     if ui_in.get("list") in LIST_KINDS:
         ui["list"] = ui_in["list"]
     cfg: dict[str, Any] = {}
-    if isinstance(cfg_in.get("snow"), str):
-        cfg["snow"] = cfg_in["snow"].strip()
     if isinstance(cfg_in.get("links"), list):
         cfg["links"] = [{"label": link["label"].strip(), "path": link["path"].strip()}
                         for link in cfg_in["links"]

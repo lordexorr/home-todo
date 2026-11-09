@@ -16,8 +16,9 @@ type Listener = Callable[[dict[str, Any]], None]
 
 
 class HomeTodo:
-    def __init__(self, hass: HomeAssistant) -> None:
+    def __init__(self, hass: HomeAssistant, name: str) -> None:
         self.hass = hass
+        self.name = name
         self._store: Store[dict[str, Any]] = Store(hass, STORAGE_VERSION, STORAGE_KEY)
         self.doc: dict[str, Any] = model.new_doc()
         self._listeners: dict[object, tuple[str, Listener]] = {}
@@ -56,6 +57,7 @@ class HomeTodo:
         return {
             "initial": True,
             "rev": self.doc["rev"],
+            "name": self.name,
             "user": {"id": user.id, "name": user.name or "", "is_admin": user.is_admin},
             "lists": {lid: self.doc["lists"][lid] for lid in (model.FAMILY, user.id)},
             "categories": self.doc["categories"],
