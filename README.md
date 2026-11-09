@@ -56,6 +56,12 @@ Everything is kept in Home Assistant, in `.storage/home_todo` in its config fold
 include it. Changes are saved as they're made, and appear straight away on every other device showing the same
 list. Each person's display settings, such as panel widths and sort order, are kept there too.
 
+Log entries more than a year old move to an archive overnight, so the page stays quick as the log grows. **Show
+older entries** at the end of the log brings them back to read, and **Export** includes them.
+
+If two people change the same notes or scratchpad at the same moment, both people's lines are kept, and where both
+changed the same line, both versions are.
+
 While Home Assistant can't be reached, the page says so, and can't be edited until it's back.
 
 ## Removing Home To-Do

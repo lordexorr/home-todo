@@ -8,14 +8,15 @@ Everything is kept in one document:
   Assistant's calendar ("cfg").
 - rev: goes up by one with each change.
 
-A list holds its open tasks ("todos"), its completed log ("done"), its scratchpad ("notes"), its category names
-("categories"), and "seq", the next task number. Family's categories are shared, and a personal list's are its owner's
+A list holds its open tasks ("todos"), its completed log ("done"), log entries more than a year old ("archive"), its
+scratchpad ("notes"), its category names ("categories"), and "seq", the next task number. Family's categories are shared, and a personal list's are its owner's
 alone. Task numbers belong to a list, and a task keeps its number when it's completed.
 
 A task can repeat. Ticked off, it goes to the log under a new number and stays open with its next due date. "from"
 says what that's counted from: "due", on a schedule from its due date, or "done", from the day it was ticked off."""
 from __future__ import annotations
 
+import difflib
 import math
 import re
 import time
@@ -30,6 +31,8 @@ LIST_KINDS = ("mine", "family")
 REPEAT_UNITS = ("day", "week", "month", "year")
 REPEAT_MAX = 999  # the most days, weeks, months or years between repeats
 PRI_NAMES = {"hi": "High", "md": "Medium", "lo": "Low"}
+ARCHIVE_AFTER_MS = 365 * 24 * 3600 * 1000  # log entries older than this move to the archive
+TAIL = 20  # how many of the log's last entry numbers a page is sent, to check its copy is in step
 _DATE = re.compile(r"\d{4}-\d{2}-\d{2}")
 
 
@@ -165,16 +168,17 @@ def norm_done(e: Any, now: int) -> dict:
 
 
 def new_list(list_id: str) -> dict:
-    return {"id": list_id, "seq": 1, "todos": [], "done": [], "notes": "", "categories": []}
+    return {"id": list_id, "seq": 1, "todos": [], "done": [], "archive": [], "notes": "", "categories": []}
 
 
 def norm_list(raw: Any, list_id: str, now: int) -> dict:
     raw = _dict(raw)
     todos = [norm_todo(t, now) for t in _list(raw.get("todos")) if isinstance(t, dict)]
     done = [norm_done(e, now) for e in _list(raw.get("done")) if isinstance(e, dict)]
-    top = max((x["id"] for x in todos + done), default=0)
+    archive = [norm_done(e, now) for e in _list(raw.get("archive")) if isinstance(e, dict)]
+    top = max((x["id"] for x in todos + done + archive), default=0)
     seen: set[int] = set()
-    for item in todos + done:  # every task number is used once in its list
+    for item in todos + done + archive:  # every task number is used once in its list
         if item["id"] < 1 or item["id"] in seen:
             top += 1
             item["id"] = top
@@ -183,7 +187,7 @@ def norm_list(raw: Any, list_id: str, now: int) -> dict:
     for name in _list(raw.get("categories")):
         _add_category(categories, name)
     return {"id": list_id, "seq": max(_int(raw.get("seq")), top + 1), "todos": todos, "done": done,
-            "notes": _text(raw.get("notes")), "categories": categories}
+            "archive": archive, "notes": _text(raw.get("notes")), "categories": categories}
 
 
 def norm_prefs(raw: Any) -> dict:
@@ -280,7 +284,8 @@ def apply_changes(doc: dict, list_id: str, changes: Any, now: int | None = None)
     Returns the task numbers that had to change: when two pages add a task with the same number at once, the second
     one gets the list's next number.
 
-    A field an edit leaves out keeps what it was, so a page from before the field existed doesn't erase it."""
+    A field an edit leaves out keeps what it was, so a page from before the field existed doesn't erase it. Notes
+    sent with "notesBase", the notes the page started from, are merged with any change someone else made meanwhile."""
     now = now or now_ms()
     lst = doc["lists"][list_id]
     changes = _dict(changes)
@@ -295,14 +300,18 @@ def apply_changes(doc: dict, list_id: str, changes: Any, now: int | None = None)
         where = {x["id"]: i for i, x in enumerate(items)}
         for raw in _list(part.get("update")):
             if isinstance(raw, dict) and (item_id := _int(raw.get("id"))) in where:
-                items[where[item_id]] = norm({**items[where[item_id]], **raw}, now)
+                current = items[where[item_id]]
+                item = norm({**current, **raw}, now)
+                if isinstance(raw.get("notesBase"), str) and isinstance(raw.get("notes"), str):
+                    item["notes"] = merge_text(raw["notesBase"], raw["notes"], current["notes"])
+                items[where[item_id]] = item
         for raw in _list(part.get("add")):
             if not isinstance(raw, dict):
                 continue
             item = norm(raw, now)
             if item["id"] in where and items[where[item["id"]]] == item:
                 continue  # sent again after a dropped connection, and already here
-            taken = {x["id"] for x in lst["todos"]} | {x["id"] for x in lst["done"]}
+            taken = {x["id"] for x in lst["todos"] + lst["done"] + lst["archive"]}
             if item["id"] < 1 or item["id"] in taken:
                 old = item["id"]
                 item["id"] = max(lst["seq"], max(taken, default=0) + 1)
@@ -313,7 +322,8 @@ def apply_changes(doc: dict, list_id: str, changes: Any, now: int | None = None)
         if isinstance(part.get("order"), list):
             lst[key] = _ordered(items, [remap[key].get(_int(i), _int(i)) for i in part["order"]])
     if isinstance(changes.get("notes"), str):
-        lst["notes"] = changes["notes"]
+        base = changes.get("notesBase")
+        lst["notes"] = merge_text(base, changes["notes"], lst["notes"]) if isinstance(base, str) else changes["notes"]
     cats = _dict(changes.get("categories"))
     for name in _list(cats.get("remove")):
         lst["categories"] = [c for c in lst["categories"] if c != name]
@@ -431,3 +441,94 @@ def event_text(todo: dict) -> tuple[str, str]:
     if (todo.get("notes") or "").strip():
         lines += ["", todo["notes"].strip()]
     return todo.get("text") or "(untitled)", "\n".join(lines)
+
+
+# ---------- what pages are sent ----------
+
+def shown(lst: dict) -> dict:
+    """A list as a page is sent it: all but the archive, which is sent only when asked for, and counted instead."""
+    out = {k: v for k, v in lst.items() if k != "archive"}
+    out["archived"] = len(lst["archive"])
+    return out
+
+
+def snapshot(lst: dict) -> dict:
+    """A list as it is now, for list_patch() to compare with once it's changed. Changed tasks and entries are new
+    objects, so the ones here are kept as they are."""
+    return {"todos": list(lst["todos"]), "done": list(lst["done"]), "notes": lst["notes"],
+            "categories": list(lst["categories"]), "archived": len(lst["archive"])}
+
+
+def list_patch(before: dict, lst: dict) -> dict:
+    """What changed in a list since snapshot(), for pages showing it: tasks and entries added or changed ("set"),
+    ones removed ("remove"), and the log's order where it isn't just the old order with new entries at the end. The
+    open tasks' order, the log's length and its last entry numbers come every time, so a page can check its copy."""
+    patch: dict[str, Any] = {"seq": lst["seq"], "todoOrder": [x["id"] for x in lst["todos"]],
+                             "doneCount": len(lst["done"]), "doneTail": [x["id"] for x in lst["done"][-TAIL:]]}
+    for key in ("todos", "done"):
+        was = {id(x) for x in before[key]}
+        old_ids = [x["id"] for x in before[key]]
+        new_ids = [x["id"] for x in lst[key]]
+        part: dict[str, Any] = {}
+        changed = [x for x in lst[key] if id(x) not in was]
+        if changed:
+            part["set"] = changed
+        if removed := sorted(set(old_ids) - set(new_ids)):
+            part["remove"] = removed
+        if key == "done":
+            kept, known = set(new_ids), set(old_ids)
+            if new_ids != [i for i in old_ids if i in kept] + [x["id"] for x in changed if x["id"] not in known]:
+                part["order"] = new_ids
+        if part:
+            patch[key] = part
+    if lst["notes"] != before["notes"]:
+        patch["notes"] = lst["notes"]
+    if lst["categories"] != before["categories"]:
+        patch["categories"] = lst["categories"]
+    if len(lst["archive"]) != before["archived"]:
+        patch["archived"] = len(lst["archive"])
+    return patch
+
+
+def archive_old(lst: dict, now: int) -> bool:
+    """Moves log entries more than a year old into the archive. True if any moved."""
+    cutoff = now - ARCHIVE_AFTER_MS
+    old = [e for e in lst["done"] if e["ts"] < cutoff]
+    if not old:
+        return False
+    lst["done"] = [e for e in lst["done"] if e["ts"] >= cutoff]
+    lst["archive"].extend(old)
+    return True
+
+
+# ---------- notes two people change at once ----------
+
+def _matching_lines(a: list[str], b: list[str]) -> dict[int, int]:
+    blocks = difflib.SequenceMatcher(None, a, b, autojunk=False).get_matching_blocks()
+    return {blk.a + k: blk.b + k for blk in blocks for k in range(blk.size)}
+
+
+def merge_text(base: str, mine: str, theirs: str) -> str:
+    """Notes a page changed from base, merged line by line with what's there now, which someone else may have
+    changed meanwhile. Where both changed the same lines, both versions are kept, theirs first, so nothing is lost."""
+    if mine == theirs or theirs == base:
+        return mine
+    if mine == base:
+        return theirs
+    b, m, t = base.split("\n"), mine.split("\n"), theirs.split("\n")
+    in_m, in_t = _matching_lines(b, m), _matching_lines(b, t)
+    out: list[str] = []
+    bi = mi = ti = 0
+    for line in [i for i in range(len(b)) if i in in_m and i in in_t] + [None]:
+        bj, mj, tj = (len(b), len(m), len(t)) if line is None else (line, in_m[line], in_t[line])
+        cb, cm, ct = b[bi:bj], m[mi:mj], t[ti:tj]
+        if cm == cb:
+            out += ct
+        elif ct in (cb, cm):
+            out += cm
+        else:
+            out += ct + cm
+        if line is not None:
+            out.append(b[line])
+        bi, mi, ti = bj + 1, mj + 1, tj + 1
+    return "\n".join(out)

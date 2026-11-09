@@ -10,6 +10,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import config_validation as cv
+from homeassistant.helpers.event import async_track_time_change
 from homeassistant.helpers.typing import ConfigType
 from homeassistant.loader import async_get_integration
 
@@ -37,6 +38,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: HomeTodoConfigEntry) -> 
     todo = HomeTodo(hass, name, version)
     await todo.async_load()
     entry.runtime_data = todo
+    entry.async_on_unload(async_track_time_change(hass, todo.archive_old, hour=3, minute=0, second=0))
     # The page runs in a frame of its own, so its styles and keyboard shortcuts stay apart from Home Assistant's.
     # The version in its address makes browsers fetch it afresh after an update.
     await panel_custom.async_register_panel(

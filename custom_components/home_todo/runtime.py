@@ -28,6 +28,7 @@ class HomeTodo:
 
     async def async_load(self) -> None:
         self.doc = model.norm_doc(await self._store.async_load())
+        self.archive_old()
 
     async def async_stop(self) -> None:
         """Saves straight away, and tells every open page to connect again."""
@@ -81,7 +82,7 @@ class HomeTodo:
             "name": self.name,
             "version": self.version,
             "user": {"id": user.id, "name": user.name or "", "is_admin": user.is_admin},
-            "lists": {lid: self.doc["lists"][lid] for lid in (model.FAMILY, user.id)},
+            "lists": {lid: model.shown(self.doc["lists"][lid]) for lid in (model.FAMILY, user.id)},
             "prefs": self.doc["prefs"].get(user.id, {}),
         }
 
@@ -89,9 +90,10 @@ class HomeTodo:
     def apply(self, list_id: str, changes: dict[str, Any]) -> dict[str, Any]:
         if list_id != model.FAMILY:
             model.ensure_personal(self.doc, list_id)
+        before = model.snapshot(self.doc["lists"][list_id])
         remap = model.apply_changes(self.doc, list_id, changes)
         self._changed()
-        self._publish({list_id})
+        self._publish({list_id: model.list_patch(before, self.doc["lists"][list_id])})
         self._tell({list_id}, calendars=False)
         return {"rev": self.doc["rev"], "remap": remap}
 
@@ -100,9 +102,26 @@ class HomeTodo:
         before = self.calendar_users()
         self.doc["prefs"][user_id] = model.norm_prefs(prefs)
         self._changed()
-        self._publish(set(), prefs_for=user_id)
+        self._publish({}, prefs_for=user_id)
         self._tell(set(), calendars=self.calendar_users() != before)
         return {"rev": self.doc["rev"]}
+
+    @callback
+    def archive(self, list_id: str) -> list[dict[str, Any]]:
+        """A list's log entries more than a year old, for a page that asks to see them."""
+        return self.doc["lists"][list_id]["archive"] if list_id in self.doc["lists"] else []
+
+    @callback
+    def archive_old(self, _now: Any = None) -> None:
+        """Moves log entries more than a year old into each list's archive. Run at startup and once a day."""
+        patches = {}
+        for list_id, lst in self.doc["lists"].items():
+            before = model.snapshot(lst)
+            if model.archive_old(lst, model.now_ms()):
+                patches[list_id] = model.list_patch(before, lst)
+        if patches:
+            self._changed()
+            self._publish(patches)
 
     @callback
     def _changed(self) -> None:
@@ -116,13 +135,12 @@ class HomeTodo:
                 watcher(lists, calendars)
 
     @callback
-    def _publish(self, lists: set[str], prefs_for: str | None = None) -> None:
-        """Sends each open page what changed that it shows."""
+    def _publish(self, patches: dict[str, dict[str, Any]], prefs_for: str | None = None) -> None:
+        """Sends each open page what changed in the lists it shows, and its owner's settings if they changed."""
         for user_id, listener in list(self._listeners.values()):
             payload: dict[str, Any] = {"rev": self.doc["rev"]}
-            shown = {lid: self.doc["lists"][lid] for lid in lists if self.can_use(user_id, lid)}
-            if shown:
-                payload["lists"] = shown
+            if mine := {lid: patch for lid, patch in patches.items() if self.can_use(user_id, lid)}:
+                payload["patches"] = mine
             if prefs_for == user_id:
                 payload["prefs"] = self.doc["prefs"].get(user_id, {})
             if len(payload) > 1:

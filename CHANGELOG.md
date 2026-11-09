@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.0
+
+- **Stays quick as the lists grow:** each change sends open pages just what changed, instead of the whole list with its entire log.
+- **Older log entries are archived:** entries more than a year old move to an archive overnight. **Show older entries** at the end of the log brings them back to read, and **Export** includes them.
+- **Two people editing at once:** notes or a scratchpad changed on two devices at the same moment keep both people's lines, and where both changed the same line, both versions are kept. Someone else's change no longer moves your cursor or drops you out of a side task you're typing in.
+
 ## 0.3.2
 
 - **Categories belong to their list:** each list has its own categories, so ones made on Mine no longer show in anyone else's category picker. Existing categories go to the lists whose tasks or log use them, and any that nothing uses go to Family.

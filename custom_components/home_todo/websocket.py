@@ -14,7 +14,7 @@ from .runtime import HomeTodo
 
 @callback
 def async_register(hass: HomeAssistant) -> None:
-    for command in (ws_subscribe, ws_apply, ws_prefs):
+    for command in (ws_subscribe, ws_apply, ws_prefs, ws_archive):
         websocket_api.async_register_command(hass, command)
 
 
@@ -55,6 +55,18 @@ def ws_apply(hass: HomeAssistant, connection: websocket_api.ActiveConnection, ms
         connection.send_error(msg["id"], "unauthorized", "That list belongs to someone else.")
         return
     connection.send_result(msg["id"], todo.apply(msg["list_id"], msg["changes"]))
+
+
+@websocket_api.websocket_command({vol.Required("type"): "home_todo/archive", vol.Required("list_id"): str})
+@callback
+def ws_archive(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict) -> None:
+    """A list's log entries more than a year old, which pages are only sent when they ask."""
+    if not (todo := _todo(hass, connection, msg)):
+        return
+    if not todo.can_use(connection.user.id, msg["list_id"]):
+        connection.send_error(msg["id"], "unauthorized", "That list belongs to someone else.")
+        return
+    connection.send_result(msg["id"], {"entries": todo.archive(msg["list_id"])})
 
 
 @websocket_api.websocket_command({vol.Required("type"): "home_todo/prefs", vol.Required("prefs"): dict})

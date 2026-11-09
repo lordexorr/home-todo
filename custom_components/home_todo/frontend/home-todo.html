@@ -379,6 +379,9 @@
   .due.today{ color:var(--warn); border-color:rgba(224,165,60,.45); background:var(--warn-soft); }
   .due.over{ color:var(--danger); border-color:rgba(240,104,92,.45); background:var(--danger-soft); }
   .addrow .field.grow{ flex-basis:118px; }
+  .older{ display:flex; justify-content:center; padding:14px 12px 18px; }
+  .row.arcrow{ cursor:default; }
+  .row.arcrow .text{ color:var(--ink-2); }
   .rbadge{ display:inline-flex; align-items:center; gap:4px; font-family:var(--mono); font-size:10.5px; font-weight:500;
     padding:1px 7px; border-radius:5px; border:1px solid var(--line-2); color:var(--ink-3); background:var(--raise); }
 
@@ -844,6 +847,11 @@
         sees it and can change it. Switch between them with the buttons beside the logo. Each list has its own
         tasks, log, scratchpad, task numbers and categories, so categories made on Mine stay yours.
       </div>
+      <div class="msub">Completed log</div>
+      <div class="mnote" style="margin-top:0;padding-top:0;border:0">
+        Entries more than a year old move to an archive, which keeps the page quick as the log grows.
+        <b>Show older entries</b> at the end of the log brings them back to read, and <b>Export</b> includes them.
+      </div>
       <div class="msub">Side tasks</div>
       <div class="mnote" style="margin-top:0;padding-top:0;border:0">
         Select a task and the notes panel gains a <b>Side tasks</b> list — the steps that make up the job.
@@ -899,6 +907,8 @@
         <span class="c">Double-click</span><span class="d">Rename a task or log entry in place.</span>
       </div>
       <div class="mnote">
+        <b>Two people typing at once</b> in the same notes or scratchpad both keep their lines; where both changed the
+        same line, both versions are kept.<br>
         <b>Notes follow the selection.</b> Click any task to open its own notes in the right panel; the detail bar above them edits due date, priority, category and waiting status. Close the task tab to return to the shared scratchpad. Notes stay attached when a task is completed.<br>
         <b>Everything is saved in Home Assistant</b> as you go, so every device you sign in on shows the same lists. The pill beside the clock says <b>Saved</b> once Home Assistant has it.
       </div>
@@ -913,7 +923,7 @@
   var $ = function(id){ return document.getElementById(id); };
   /* ============ state ============ */
   var S = {
-    seq: 1, todos: [], done: [], categories: [], notes: "",          // the list on screen
+    seq: 1, todos: [], done: [], categories: [], notes: "", archived: 0,   // the list on screen
     cfg: { links: defaultLinks(), calendar: false, linksSaved: false },
     ui: defaultUi()
   };
@@ -1039,7 +1049,8 @@
   // page showing that list.
   var HOST = window.homeTodoHost || null;
   var conn = null, unsub = null, me = null, listening = false;
-  var booted = false, online = false, failed = false, inflight = 0, latest = null, connMsg = "", leaving = false;
+  var booted = false, online = false, failed = false, inflight = 0, connMsg = "", leaving = false;
+  var queue = [];                                   // what Home Assistant sent while edits were on their way
   var active = "";                                  // id of the list on screen
   var sent = { decks:{}, prefs:"" };       // what this page has sent: edits are measured from here
   var acked = { decks:{}, prefs:"" };      // what Home Assistant has confirmed it has
@@ -1055,12 +1066,14 @@
       todos: (Array.isArray(d.todos) ? d.todos : []).map(normTodo),
       done: (Array.isArray(d.done) ? d.done : []).map(normDone),
       notes: typeof d.notes === "string" ? d.notes : "",
-      categories: (Array.isArray(d.categories) ? d.categories : []).filter(function(c){ return typeof c === "string" && c; })
+      categories: (Array.isArray(d.categories) ? d.categories : []).filter(function(c){ return typeof c === "string" && c; }),
+      archived: Math.max(0, +d.archived || 0)       // log entries in the archive, which is fetched only when asked for
     };
   }
   function listId(kind){ return kind === "family" ? "family" : (me ? me.id : ""); }
   function deckNow(){
-    return { id:active, seq:S.seq, todos:clone(S.todos), done:clone(S.done), notes:S.notes, categories:S.categories.slice() };
+    return { id:active, seq:S.seq, todos:clone(S.todos), done:clone(S.done), notes:S.notes, categories:S.categories.slice(),
+             archived:S.archived };
   }
   // keep: the same list again, from Home Assistant. Its tasks are updated in place, so anything still holding one,
   // such as an Undo, keeps working.
@@ -1070,6 +1083,7 @@
     S.done = keep ? reuse(S.done, clone(d.done)) : clone(d.done);
     S.notes = d.notes;
     S.categories = d.categories.slice();
+    S.archived = d.archived;
     S.todos.concat(S.done).forEach(function(x){ if(x.id > maxId) maxId = x.id; });
     S.seq = Math.max(d.seq, maxId + 1);
   }
@@ -1092,7 +1106,10 @@
     cur.forEach(function(x){ cm[x.id] = x; });
     cur.forEach(function(x){
       if(!om[x.id]) out.add.push(x);
-      else if(JSON.stringify(x) !== JSON.stringify(om[x.id])) out.update.push(x);
+      else if(JSON.stringify(x) !== JSON.stringify(om[x.id])){
+        // Notes go with what they were before, so Home Assistant can merge them with someone else's change.
+        out.update.push(x.notes !== om[x.id].notes ? Object.assign({}, x, { notesBase:om[x.id].notes }) : x);
+      }
     });
     old.forEach(function(x){ if(!cm[x.id]) out.remove.push(x.id); });
     var a = cur.filter(function(x){ return om[x.id]; }).map(function(x){ return x.id; }).join(",");
@@ -1106,7 +1123,7 @@
     var ch = {}, any = false, t = diffItems(S.todos, d.todos), e = diffItems(S.done, d.done);
     if(t){ ch.todos = t; any = true; }
     if(e){ ch.done = e; any = true; }
-    if(S.notes !== d.notes){ ch.notes = S.notes; any = true; }
+    if(S.notes !== d.notes){ ch.notes = S.notes; ch.notesBase = d.notes; any = true; }
     var add = S.categories.filter(function(c){ return d.categories.indexOf(c) < 0; });
     var rem = d.categories.filter(function(c){ return S.categories.indexOf(c) < 0; });
     if(add.length || rem.length){ ch.categories = { add:add, remove:rem }; any = true; }
@@ -1175,18 +1192,21 @@
   // Once nothing is on its way: send any edits made meanwhile, or else take what Home Assistant last sent.
   function settle(){
     if(inflight > 0){ setSyncUI(); return; }
-    if(failed){ failed = false; latest = null; resync(); return; }
+    if(failed){ failed = false; queue = []; resync(); return; }
     if(online && hasPending()){ save(); return; }
-    if(latest && online){ var ev = latest; latest = null; takeServer(ev); }
+    if(queue.length && online){
+      var q = queue; queue = [];
+      for(var i = 0; i < q.length; i++) if(!takeServer(q[i])) break;   // out of step: everything is fetched again
+    }
     setSyncUI();
   }
   function onEvent(ev){
     if(!ev || typeof ev !== "object") return;
-    if(ev.closed){ online = false; latest = null; setSyncUI(); setTimeout(resync, 2000); return; }
+    if(ev.closed){ online = false; queue = []; setSyncUI(); setTimeout(resync, 2000); return; }
     if(ev.initial){
       if(ev.version && HOST && HOST.version && ev.version !== HOST.version){
         // Home To-Do was updated while this page was open. Its rules are out of date, so it stops editing.
-        outdated = true; online = false; latest = null;
+        outdated = true; online = false; queue = [];
         connMsg = "Home To-Do has been updated. Reload to use the new version.";
         disconnect(); setSyncUI();
         return;
@@ -1197,37 +1217,70 @@
       if(!booted){ start(ev); return; }
       online = true;
     }
-    latest = mergeEvents(latest, ev);
+    queue.push(ev);
     settle();
   }
-  function mergeEvents(a, b){
-    if(!a) return b;
-    var out = { lists:{}, prefs: b.prefs || a.prefs };
-    Object.keys(a.lists || {}).forEach(function(k){ out.lists[k] = a.lists[k]; });
-    Object.keys(b.lists || {}).forEach(function(k){ out.lists[k] = b.lists[k]; });
-    return out;
+  // Home Assistant's change to a list: tasks and entries added or changed ("set") or removed, the open tasks' order,
+  // and the log's where it isn't simply new entries at the end. False if the result doesn't match what Home
+  // Assistant says it has, so the page is out of step.
+  function applyPatch(d, p){
+    ["todos","done"].forEach(function(key){
+      var part = p[key];
+      if(!part) return;
+      var norm = key === "todos" ? normTodo : normDone, gone = {}, at = {};
+      (part.remove || []).forEach(function(id){ gone[id] = 1; });
+      var items = d[key].filter(function(x){ return !gone[x.id]; });
+      items.forEach(function(x, i){ at[x.id] = i; });
+      (part.set || []).forEach(function(raw){
+        var x = norm(raw);
+        if(x.id in at) items[at[x.id]] = x; else { at[x.id] = items.length; items.push(x); }
+      });
+      if(Array.isArray(part.order)) items = orderBy(items, part.order);
+      d[key] = items;
+    });
+    if(Array.isArray(p.todoOrder)) d.todos = orderBy(d.todos, p.todoOrder);
+    if(typeof p.notes === "string") d.notes = p.notes;
+    if(Array.isArray(p.categories)) d.categories = p.categories.filter(function(c){ return typeof c === "string" && c; });
+    if(+p.seq) d.seq = +p.seq;
+    if(typeof p.archived === "number") d.archived = p.archived;
+    var ids = function(list){ return list.map(function(x){ return x.id; }).join(","); };
+    return (!Array.isArray(p.todoOrder) || ids(d.todos) === p.todoOrder.join(",")) &&
+           (typeof p.doneCount !== "number" || d.done.length === p.doneCount) &&
+           (!Array.isArray(p.doneTail) || ids(d.done.slice(-p.doneTail.length || d.done.length)) === p.doneTail.join(","));
   }
   function notesSig(){ return selected ? JSON.stringify(selectedItem() || null) : "scratch:" + S.notes; }
-  // Takes Home Assistant's version of everything in ev, and redraws only what changed.
+  // Takes what Home Assistant sent in ev, whole lists or changes to them, and redraws only what changed. False if
+  // the page turned out to be out of step, in which case everything is fetched again.
   function takeServer(ev){
-    var lists = ev.lists || {}, sig = notesSig();
-    var before = JSON.stringify([S.todos, S.done, S.notes, S.categories]);
+    var lists = ev.lists || {}, patches = ev.patches || {}, sig = notesSig(), ok = true;
+    var before = JSON.stringify([S.todos, S.done, S.notes, S.categories, S.archived]);
     Object.keys(lists).forEach(function(id){
       var d = normDeck(lists[id]);
       sent.decks[id] = d; acked.decks[id] = clone(d);
+      if(archive.list === id) archive = { list:"", entries:null, loading:false };
       if(id === active) loadActive(true);
     });
+    Object.keys(patches).forEach(function(id){
+      if(!ok || !acked.decks[id]) return;
+      var d = clone(acked.decks[id]), was = d.archived;
+      if(!applyPatch(d, patches[id])){ ok = false; return; }
+      sent.decks[id] = d; acked.decks[id] = clone(d);
+      if(archive.list === id && d.archived !== was) archive = { list:"", entries:null, loading:false };
+      if(id === active) loadActive(true);
+    });
+    if(!ok){ resync(); return false; }
     if(ev.prefs){
       var was = prefsNow();
       adoptPrefs(ev.prefs);
       sent.prefs = acked.prefs = prefsNow();
       if(sent.prefs !== was) applyUi();
     }
-    if(JSON.stringify([S.todos, S.done, S.notes, S.categories]) !== before){
+    if(JSON.stringify([S.todos, S.done, S.notes, S.categories, S.archived]) !== before){
       if(!editing && !isDragging){ renderTodos(); renderLog(); }
       renderMetrics(); renderPops();
       if(notesSig() !== sig) renderNotes();
     }
+    return true;
   }
   function start(ev){
     Object.keys(ev.lists || {}).forEach(function(id){
@@ -1272,6 +1325,7 @@
     selected = null; editing = null;
     $("toasts").textContent = "";             // an Undo for the other list mustn't act on this one
     setPick("todo", null); setPick("log", null);   // categories belong to their list
+    archive = { list:"", entries:null, loading:false };
     loadActive();
     save();                                   // remembers which list was open
     renderListSeg(); syncAll();
@@ -1704,6 +1758,46 @@
     list.innerHTML = h;
     list.scrollTop = keepScroll;
   }
+  // Log entries more than a year old, kept in Home Assistant's archive and fetched when asked for. Read-only here.
+  var archive = { list:"", entries:null, loading:false };
+  function loadArchive(then){
+    if(archive.loading || !conn || !online) return;
+    var id = active;
+    archive = { list:id, entries:null, loading:true };
+    renderLog();
+    conn.sendMessagePromise({ type:"home_todo/archive", list_id:id }).then(function(res){
+      archive = { list:id, entries:((res && res.entries) || []).map(normDone), loading:false };
+      if(id === active){ renderLog(); if(then) then(); }
+    }, function(){
+      archive = { list:"", entries:null, loading:false };
+      renderLog();
+      toast("Couldn't fetch the older entries from Home Assistant", "err");
+    });
+  }
+  function archivedHtml(){
+    if(!S.archived) return "";
+    var mine = archive.list === active;
+    if(!mine || !archive.entries){
+      var n = S.archived + " older entr" + (S.archived === 1 ? "y" : "ies");
+      return '<div class="older"><button type="button" class="ghost sm" id="logOlder">' +
+        (mine && archive.loading ? "Fetching " + n + "…" : "Show " + n) + '</button></div>';
+    }
+    var all = archive.entries.filter(matches), buckets = {}, h = "";
+    all.forEach(function(e){ var k = dateKey(e.ts); (buckets[k] = buckets[k] || []).push(e); });
+    h += '<div class="grouphdr">Archived<span class="n">' + all.length + '</span></div>';
+    Object.keys(buckets).sort().reverse().forEach(function(k){
+      var items = buckets[k];
+      h += '<div class="grouphdr">' + esc(dayLabel(items[0].ts)) + ' ' + new Date(items[0].ts).getFullYear() +
+        '<span class="n">' + items.length + '</span></div><div class="group">';
+      items.forEach(function(e){
+        h += '<div class="row arcrow" data-id="' + e.id + '" data-kind="archived"><span class="ltime">' + fmtTime(e.ts) +
+          '</span><div class="rmain"><div class="rline">' + chip(e.category) + '<span class="text">' + esc(e.text) +
+          '</span></div></div><div class="rtools"><span class="rid">#' + e.id + '</span></div></div>';
+      });
+      h += '</div>';
+    });
+    return h;
+  }
   function renderLog(){
     var all = S.done.filter(matches);
     $("logCount").textContent = filterQ ? all.length + "/" + S.done.length : S.done.length;
@@ -1713,7 +1807,10 @@
     if(!all.length){
       list.innerHTML = '<div class="empty">' + (filterQ
         ? '<b>Nothing matches ' + esc(filterQ) + '</b>Run <code>find</code> with no text to clear the filter.'
-        : '<b>Nothing logged yet</b>Record what you finished in the field above, or tick a task to move it here. Export saves them as a text file.') + '</div>';
+        : S.archived
+          ? '<b>Nothing logged in the last year</b>Older entries are in the archive below.'
+          : '<b>Nothing logged yet</b>Record what you finished in the field above, or tick a task to move it here. Export saves them as a text file.') +
+        '</div>' + archivedHtml();
       return;
     }
     var buckets = {}, order = [];
@@ -1743,7 +1840,7 @@
       });
       h += '</div>';
     });
-    list.innerHTML = h;
+    list.innerHTML = h + archivedHtml();
     list.scrollTop = keepScroll;
   }
   function renderLinks(){
@@ -1789,6 +1886,22 @@
 
   /* ============ notes panel ============ */
   var notesEl, noteTimer = null;
+  // Where a cursor goes when the text around it changes: as far from the end as it was if the text after it is the
+  // same, as when typing at the end, and otherwise where it was if the text before it is.
+  function caretAfter(old, start, end, value){
+    var tail = old.length - end;
+    if(value.slice(value.length - tail) === old.slice(end) || old.slice(0, end) !== value.slice(0, end))
+      return [Math.max(0, value.length - (old.length - start)), Math.max(0, value.length - tail)];
+    return [Math.min(start, value.length), Math.min(end, value.length)];
+  }
+  // Puts text in a box without losing the place of someone typing in it.
+  function setField(el, value){
+    if(el.value === value) return;
+    if(el !== document.activeElement){ el.value = value; return; }
+    var at = caretAfter(el.value, el.selectionStart, el.selectionEnd, value);
+    el.value = value;
+    try{ el.setSelectionRange(at[0], at[1]); }catch(e){}
+  }
   function updateNoteMeta(){
     var w = (notesEl.value.trim().match(/\S+/g) || []).length;
     $("noteMeta").textContent = w + " word" + (w === 1 ? "" : "s");
@@ -1806,7 +1919,7 @@
     if(!item){
       tabTask.hidden = true; detail.hidden = true; $("subsBox").hidden = true;
       $("notesTitle").textContent = "Notes";
-      notesEl.value = S.notes;
+      setField(notesEl, S.notes);
       notesEl.placeholder = "Scratchpad — phone numbers, measurements, anything you want on hand. Click a task to switch to its own notes.";
     } else {
       tabTask.hidden = false; tabTask.classList.add("on");
@@ -1814,12 +1927,12 @@
       $("tabLabel").textContent = item.text || "(untitled)";
       tabTask.title = item.text;
       $("notesTitle").textContent = selected.type === "todo" ? "Task notes" : "Entry notes";
-      notesEl.value = item.notes;
+      setField(notesEl, item.notes);
       notesEl.placeholder = "Notes for this " + (selected.type === "todo" ? "task" : "entry") +
         " — model numbers, quotes, who you called, what's next.";
       var isTodo = selected.type === "todo";
       detail.hidden = false;
-      $("dTitle").value = item.text;
+      setField($("dTitle"), item.text);
       autosizeTitle();
       Array.prototype.forEach.call(document.querySelectorAll("#dPri button"), function(b){
         b.classList.toggle("on", isTodo && b.getAttribute("data-v") === item.pri);
@@ -1836,7 +1949,7 @@
       $("dRepRow").hidden = !isTodo;
       renderRepeatPicker("detail");
       renderSubs();
-      if(isTodo){ $("dWaitOn").value = item.waitingOn || ""; $("dFollow").value = item.followUp || ""; }
+      if(isTodo){ setField($("dWaitOn"), item.waitingOn || ""); $("dFollow").value = item.followUp || ""; }
       var pickerField = document.querySelector('.cat[data-target="detail"]');
       var cur = pickerField.querySelector(".cat-cur");
       if(item.category){ cur.textContent = item.category; cur.classList.remove("ph"); }
@@ -1862,7 +1975,12 @@
     var st = subStats(item);
     $("subCount").textContent = st.total ? st.done + "/" + st.total : "0";
     $("subClear").hidden = st.done === 0;
-    var list = $("subList");
+    var list = $("subList"), f = document.activeElement, back = null;
+    // A side task being typed in is found again once the list is rebuilt, with its cursor where it was.
+    if(f && list.contains(f)){
+      var attr = f.hasAttribute("data-subtext") ? "data-subtext" : f.hasAttribute("data-subnotes") ? "data-subnotes" : null;
+      if(attr) back = { attr:attr, id:f.getAttribute(attr), value:f.value, start:f.selectionStart, end:f.selectionEnd };
+    }
     list.textContent = "";
     if(!item.subs.length){
       var empty = document.createElement("div");
@@ -1911,6 +2029,12 @@
       }
       list.appendChild(row);
     });
+    var g = back && list.querySelector("[" + back.attr + '="' + back.id + '"]');
+    if(g){
+      var at = caretAfter(back.value, back.start, back.end, g.value);
+      g.focus();
+      try{ g.setSelectionRange(at[0], at[1]); }catch(e){}
+    }
   }
   function addSub(item, text){
     var t = String(text || "").trim();
@@ -2186,9 +2310,12 @@
 
   /* ============ log export ============ */
   function exportTxt(){
-    if(!S.done.length){ toast("Nothing to export yet", "warn"); return; }
+    var have = archive.list === active && archive.entries;
+    if(S.archived && !have){ loadArchive(exportTxt); return; }   // the archive goes in too
+    var entries = S.done.concat(have ? archive.entries : []);
+    if(!entries.length){ toast("Nothing to export yet", "warn"); return; }
     var groups = {};
-    S.done.forEach(function(e){ (groups[dateKey(e.ts)] = groups[dateKey(e.ts)] || []).push(e); });
+    entries.forEach(function(e){ (groups[dateKey(e.ts)] = groups[dateKey(e.ts)] || []).push(e); });
     var lines = [];
     Object.keys(groups).sort().forEach(function(k){
       var items = groups[k].slice().sort(function(a,b){ return a.ts - b.ts; });
@@ -2598,8 +2725,9 @@
         if(wrap) selectItem("todo", +wrap.getAttribute("data-id"));
         return;
       }
+      if(e.target.closest("#logOlder")){ loadArchive(); return; }
       var r = e.target.closest(".row");
-      if(r) selectItem(r.getAttribute("data-kind"), +r.getAttribute("data-id"));
+      if(r && r.getAttribute("data-kind") !== "archived") selectItem(r.getAttribute("data-kind"), +r.getAttribute("data-id"));
     }
     $("todoList").addEventListener("click", listClick);
     $("logList").addEventListener("click", listClick);
@@ -2607,7 +2735,8 @@
       var r = e.target.closest(".row"); if(r && e.target.closest(".text")) startEdit("todo", +r.getAttribute("data-id"));
     });
     $("logList").addEventListener("dblclick", function(e){
-      var r = e.target.closest(".row"); if(r && e.target.closest(".text")) startEdit("done", +r.getAttribute("data-id"));
+      var r = e.target.closest(".row");
+      if(r && r.getAttribute("data-kind") === "done" && e.target.closest(".text")) startEdit("done", +r.getAttribute("data-id"));
     });
     setupSortable($("todoList"), ".taskwrap", commitTodos);
     setupSortable($("logList"), ".row.logrow", commitLog);
@@ -2936,7 +3065,7 @@
 
   window.HOMETODO = { state:S, parseWhen:parseWhen, run:runCommand,
     parseTags:parseTags, categoryToken:categoryToken, categoryKey:categoryKey, theme:applyTheme,
-    addSub:addSub, subStats:subStats, nextDue:nextDue, parseRepeat:parseRepeat, linkUrl:linkUrl,
+    addSub:addSub, subStats:subStats, nextDue:nextDue, parseRepeat:parseRepeat, linkUrl:linkUrl, setField:setField,
     tick:function(){ if(clockTick) clockTick(); },
     sync:{ changes:listChanges, pending:hasPending, save:save, switchList:switchList,
       active:function(){ return active; }, online:function(){ return online; }, booted:function(){ return booted; },
