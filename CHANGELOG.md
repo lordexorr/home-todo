@@ -2,64 +2,67 @@
 
 ## 0.6.0
 
-- **Who can see Family:** under **Configure**, an administrator can make the Family list view only for some people, or hide it from them. People who can only view it see it but can't change it, so requests can't be for them. Home Assistant shows every calendar to everyone, so the Family calendar still shows Family's due dates to people it's hidden from.
-- **Links to areas and devices:** a task can be linked to an area or a device in Home Assistant, chosen under **Link** in its details or with `link 12 furnace` in the command bar. The task shows the link, which administrators can click to open in Home Assistant. `find` searches it, the log keeps it, and calendar events name it.
-- **Undo for removing a category** from the category picker.
-- **Ticked off on two devices at once:** a task ticked off on two devices at the same moment is logged once, not twice.
-- **The name set under Configure** shows on Home To-Do's entry in Devices & services too.
-- Behind the scenes: the manifest no longer says Home To-Do polls anything, and some old names in the code are tidied up.
+- **New: Control who sees the Family list.** Under **Configure**, an administrator can make Family view only for some people, or hide it from them. People who can only view it can't be given requests. Home Assistant's calendar still shows Family's due dates to everyone.
+- **New: Link a task to an area or device.** Choose it under **Link** in the task's details, or type `link 12 furnace`. Administrators can click the link to open that area or device. `find` searches links, and the log and calendar keep them.
+- **Improved: Undo after removing a category** from the category picker.
+- **Fix: A task ticked off on two devices at once** is now logged once, not twice.
+- **Fix: Devices & services shows the name set under Configure**, not "Home To-Do".
+- **Behind the scenes: Code tidy-up.** Nothing changes for you.
 
 ## 0.5.0
 
-- **Requests:** a Family task can be for someone, chosen with **For** beside the due date, in the task's details, or with `>Name` in the command bar, such as `add >Col Pick up the dry cleaning ^fri`. The person it's for is told on their phone, and whoever asked is told when it's done. Tasks for you are marked, the **Family** button counts them, and they're on your own calendar if you've turned it on.
-- **Choosing where you're notified:** in Home To-Do, open the menu beside the clock, choose **Settings**, and pick your phone under **Notify me on**. Everyone picks their own while signed in as themselves. Tapping a notification on your phone opens Home To-Do.
-- **Making an existing task a request:** click a Family task and choose someone under **For** in its details, or choose **Anyone** to take it off them. In the command bar, `for 12 Colleen` and `for 12 none` do the same for task #12.
+- **New: Requests.** A Family task can be for someone: choose them with **For** beside the due date, in the task's details, or with `>Name` in the command bar, such as `add >Col Pick up the dry cleaning ^fri`. They're notified, and you're notified when they've done it. Tasks for you are marked, and the **Family** button counts them.
+- **New: Choose where you're notified.** Open the menu beside the clock, choose **Settings**, and pick your phone under **Notify me on**. Everyone picks their own. Tapping a notification opens Home To-Do.
+- **New: Make an existing task a request.** Click a Family task and choose someone under **For** in its details, or **Anyone** to take it off them. `for 12 Colleen` and `for 12 none` do the same in the command bar.
+- **Improved: Requests for you are on your own calendar**, if you've turned it on.
 
 ## 0.4.0
 
-- **Stays quick as the lists grow:** each change sends open pages just what changed, instead of the whole list with its entire log.
-- **Older log entries are archived:** entries more than a year old move to an archive overnight. **Show older entries** at the end of the log brings them back to read, and **Export** includes them.
-- **Two people editing at once:** notes or a scratchpad changed on two devices at the same moment keep both people's lines, and where both changed the same line, both versions are kept. Someone else's change no longer moves your cursor or drops you out of a side task you're typing in.
+- **Improved: Stays quick as lists grow.** Each change sends open pages only what changed, not the whole list.
+- **New: Older log entries are archived.** Entries more than a year old move to an archive overnight. **Show older entries** at the end of the log brings them back, and **Export** includes them.
+- **Improved: Two people can edit the same notes at once.** Both people's lines are kept, and where both changed the same line, both versions are kept.
+- **Fix: Someone else's change no longer moves your cursor** or drops you out of a side task you're typing in.
 
 ## 0.3.2
 
-- **Categories belong to their list:** each list has its own categories, so ones made on Mine no longer show in anyone else's category picker. Existing categories go to the lists whose tasks or log use them, and any that nothing uses go to Family.
-- **After an update,** a Home To-Do page that was already open says Home To-Do has been updated and offers to reload, instead of carrying on with the old version. Edits from an older page no longer erase what it doesn't know about, such as a task's repeat.
-- **Fixes:**
-  - A quick double tap on a repeating task's tick completed it twice.
-  - On a page left open overnight, the date beside "Log something you did" stayed on the day before.
-  - A shortcut typed without `https://` never appeared in the top bar. It's now added, and Settings says when a shortcut isn't a web address, such as `mailto:`, and isn't kept.
+- **Changed: Each list has its own categories**, so categories made on Mine stay private. Existing categories went to the lists that use them, and unused ones to Family.
+- **New: An open page asks you to reload after an update**, instead of carrying on with the old version.
+- **Fix: Edits from a page opened before an update** no longer erase newer settings, such as a task's repeat.
+- **Fix: A quick double tap on a repeating task** no longer completes it twice.
+- **Fix: On a page left open overnight**, the log's date now moves on to the new day.
+- **Fix: A shortcut typed without `https://`** now appears, with `https://` added. One that isn't a web address, such as `mailto:`, isn't kept.
 
 ## 0.3.1
 
-- **An example shortcut:** the top bar starts with a **Trash schedule** shortcut, so it's clear what shortcuts are for. Change it to your town's pickup calendar under **Settings**, or remove it there and it stays removed. Everyone who hasn't saved their own shortcuts yet sees it.
-- **Clearer hints** in an empty shortcut row: "Label, such as Trash schedule" and "Web address it opens (https://…)".
+- **New: An example shortcut.** The top bar starts with **Trash schedule**, to show what shortcuts are for. Change or remove it under **Settings**.
+- **Improved: Clearer hints** in an empty shortcut row.
 
 ## 0.3.0
 
-- **Repeating tasks:** a task can repeat every so many days, weeks, months or years, set with the new ↻ button beside the due date, in the task's details, or with `*1w` or `~3mo` in the command bar. **On a schedule** counts from the due date, so trash stays on Mondays even when it's done late; **after it's done** counts from the day it's ticked off, so the furnace filter is due three months after the last change. Ticking one off logs it and brings it straight back with its next due date and its side tasks unticked. `repeat # none` stops one repeating.
-- **Home Assistant's calendar:** the Family list's tasks with a due date are on Home Assistant's calendar as **Home To-Do Family**, with scheduled repeats on each date they're coming up. Automations can use it like any calendar.
-- **Your own list on the calendar:** each person can put their list there too, under **Settings**. It's off unless they turn it on, since Home Assistant shows every calendar to everyone who signs in.
+- **New: Repeating tasks.** A task can repeat every so many days, weeks, months or years: use the ↻ button beside the due date, the task's details, or `*1w` or `~3mo` in the command bar. **On a schedule** counts from the due date; **after it's done** counts from when you tick it off. Ticking one off logs it and brings it back with its next due date.
+- **New: Family on Home Assistant's calendar.** Family's tasks with a due date appear as **Home To-Do Family**, including scheduled repeats. Automations can use it like any calendar.
+- **New: Your own list on the calendar**, if you turn it on under **Settings**. It's off by default, since Home Assistant shows every calendar to everyone.
 
 ## 0.2.1
 
-- **Home Assistant's colors:** the page takes its colors from each person's Home Assistant theme. Dark is Home Assistant's black rather than a blue-grey, light is its light grey and white, and buttons and highlights are its blue. A custom theme carries over too. Priority, due dates and finished side tasks keep their own red, amber and green.
+- **Changed: The page uses Home Assistant's colors**, from each person's theme. Dark is Home Assistant's black, and buttons and highlights are its blue. Custom themes carry over.
 
 ## 0.2.0
 
-- **Its own name:** the page and the sidebar say **Home To-Do**. **Configure** on its entry changes the name for everyone, such as "Lowry Home To-Do", and says that removing Home To-Do keeps the lists.
-- **Light and dark follow Home Assistant,** for each person, and change as soon as Home Assistant does. The theme button is gone.
-- **Sort by, then by:** sort tasks by due date, priority, category or age, then by a second of those. Category sorts A–Z, with tasks that have no category last. Each person's choice is saved.
-- **For the household:** ServiceNow tickets, with their links and setting, and the subnet calculator are gone. **Export log (.txt)** saves what got done, by day. Examples, hints and placeholders are about the house, the logo is a house with a check mark, and notes are in the regular font.
-- **Top-bar shortcuts** take any web address, set under **Settings** in the menu beside the clock.
+- **New: Its own name.** The page and sidebar say **Home To-Do**, and **Configure** can change it for everyone, such as "Lowry Home To-Do".
+- **Changed: Light and dark follow Home Assistant**, for each person. The theme button is gone.
+- **New: Sort by, then by.** Sort by due date, priority, category or age, then by a second of those. Each person's choice is saved.
+- **New: Export log (.txt)** saves what got done, by day.
+- **Changed: Made for the household.** Examples, hints, placeholders and the logo are about the house, and work-only features are gone.
+- **Improved: Top-bar shortcuts** take any web address, set under **Settings**.
 
 ## 0.1.0
 
-The first release: task lists for the house on a page in Home Assistant's sidebar, with everything kept in Home Assistant.
+The first release: task lists for the house, on a page in Home Assistant's sidebar.
 
-- **Mine and Family:** everyone has their own list, which only they see, administrators included, and shares the Family list, which everyone can change. Switch between them with the buttons beside the logo. Each list has its own tasks, log, scratchpad and task numbers; categories are shared by both.
-- **Kept in Home Assistant:** every change is saved in `.storage/home_todo` as it's made, and shows straight away on every other device with the same list open. Home Assistant's backups include it.
-- **Display settings,** such as the theme, panel widths, sort order and which list was open, are saved for each person, on every device.
-- **Offline:** while Home Assistant can't be reached, the page says so and can't be edited until it's back.
-- **Removing Home To-Do** keeps the lists, so adding it again brings them back. The README says how to delete them for good.
-- **On a phone,** the menu button at the top left opens Home Assistant's sidebar.
+- **New: Mine and Family.** Everyone has their own private list and shares the Family list. Switch with the buttons beside the logo.
+- **New: Kept in Home Assistant.** Every change is saved in `.storage/home_todo` and shows straight away on every device with the same list open. Home Assistant's backups include it.
+- **New: Your display settings follow you** to every device, such as panel widths, sort order and which list was open.
+- **New: Offline notice.** While Home Assistant can't be reached, the page says so and can't be edited until it's back.
+- **New: Removing Home To-Do keeps the lists**, so adding it again brings them back.
+- **New: On a phone, the menu button** at the top left opens Home Assistant's sidebar.
