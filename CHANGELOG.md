@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.6.0
+
+- **Who can see Family:** under **Configure**, an administrator can make the Family list view only for some people, or hide it from them. People who can only view it see it but can't change it, so requests can't be for them. Home Assistant shows every calendar to everyone, so the Family calendar still shows Family's due dates to people it's hidden from.
+- **Links to areas and devices:** a task can be linked to an area or a device in Home Assistant, chosen under **Link** in its details or with `link 12 furnace` in the command bar. The task shows the link, which administrators can click to open in Home Assistant. `find` searches it, the log keeps it, and calendar events name it.
+- **Undo for removing a category** from the category picker.
+- **Ticked off on two devices at once:** a task ticked off on two devices at the same moment is logged once, not twice.
+- **The name set under Configure** shows on Home To-Do's entry in Devices & services too.
+- Behind the scenes: the manifest no longer says Home To-Do polls anything, and some old names in the code are tidied up.
+
 ## 0.5.0
 
 - **Requests:** a Family task can be for someone, chosen with **For** beside the due date, in the task's details, or with `>Name` in the command bar, such as `add >Col Pick up the dry cleaning ^fri`. The person it's for is told on their phone, and whoever asked is told when it's done. Tasks for you are marked, the **Family** button counts them, and they're on your own calendar if you've turned it on.

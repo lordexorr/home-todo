@@ -16,12 +16,19 @@
         "title": "Home To-Do",
         "description": "Removing Home To-Do keeps every list in `.storage/home_todo`, so adding it again brings them back. To delete the lists for good, delete that file as well.",
         "data": {
-          "name": "Name"
+          "name": "Name",
+          "family_view_only": "Family: view only",
+          "family_no_access": "Family: no access"
         },
         "data_description": {
-          "name": "Shown at the top of the page and in the sidebar, for everyone. For example, Lowry Home To-Do."
+          "name": "Shown at the top of the page and in the sidebar, for everyone. For example, Lowry Home To-Do.",
+          "family_view_only": "These people see the Family list but can't change it, so requests can't be for them. Everyone not in either list can change it.",
+          "family_no_access": "These people don't see the Family list on Home To-Do's page. Home Assistant shows every calendar to everyone, so the Family calendar still shows them Family's due dates."
         }
       }
+    },
+    "error": {
+      "both_lists": "Someone can't be in both lists."
     }
   }
 }

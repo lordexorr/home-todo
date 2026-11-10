@@ -22,7 +22,9 @@ Assistant theme, light or dark. After an update, a Home To-Do page that was alre
 
 - **Mine** is each person's own list. Only they see it, administrators included, unless they put it on Home
   Assistant's calendar.
-- **Family** is shared: everyone who uses Home To-Do sees it and can change it.
+- **Family** is shared: everyone who uses Home To-Do sees it and can change it, unless an administrator makes it view
+  only, or hides it, for some people under **Configure**. Home Assistant shows every calendar to everyone, so the
+  Family calendar still shows Family's due dates to people it's hidden from.
 
 Switch between them with the buttons beside the logo. Each list has its own tasks, log, scratchpad, task numbers and
 categories, so categories made on Mine stay private.
@@ -37,6 +39,13 @@ The person it's for is told on their phone, and whoever asked is told when it's 
 notifications go under **Settings** on Home To-Do's page: a phone with Home Assistant's app, or Home Assistant's own
 notifications. Tapping one on a phone opens Home To-Do. Tasks for you are marked, the **Family** button counts them,
 and they're on your own calendar if you've turned it on.
+
+## Links to areas and devices
+
+A task can be linked to an area or a device in Home Assistant, such as "Replace the filter" and the furnace: choose it
+under **Link** in the task's details, or type `link 12 furnace` in the command bar. The task shows what it's linked to,
+which administrators can click to open in Home Assistant. `find` searches it, the log keeps it, and the task's calendar
+event names it.
 
 ## Repeating tasks
 

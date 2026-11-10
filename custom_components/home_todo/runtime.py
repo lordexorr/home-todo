@@ -23,7 +23,8 @@ type Watcher = Callable[[set[str], bool], None]  # the lists that changed, and w
 
 
 class HomeTodo:
-    def __init__(self, hass: HomeAssistant, name: str, version: str) -> None:
+    def __init__(self, hass: HomeAssistant, name: str, version: str, view_only: Any = (),
+                 no_access: Any = ()) -> None:
         self.hass = hass
         self.name = name
         self.version = version  # a page from another version stops and asks to be reloaded
@@ -32,6 +33,7 @@ class HomeTodo:
         self._listeners: dict[object, tuple[str, Listener]] = {}
         self._watchers: list[Watcher] = []
         self.names: dict[str, str] = {}  # everyone with a login, by user id
+        self.view_only, self.no_access = set(view_only), set(no_access)  # set under Configure
 
     async def async_load(self) -> None:
         self.doc = model.norm_doc(await self._store.async_load())
@@ -45,10 +47,16 @@ class HomeTodo:
         self._listeners.clear()
         await self._store.async_save(self.doc)
 
-    @staticmethod
-    def can_use(user_id: str, list_id: str) -> bool:
-        """Everyone uses the Family list, and only its owner uses a personal list, administrators included."""
-        return list_id in (model.FAMILY, user_id)
+    def family_access(self, user_id: str) -> str:
+        """ "edit", "view" or "none", as set under Configure. Everyone can change Family unless they're listed there."""
+        return "none" if user_id in self.no_access else "view" if user_id in self.view_only else "edit"
+
+    def can_use(self, user_id: str, list_id: str) -> bool:
+        """Only its owner sees a personal list, administrators included, and Family is seen by everyone with access."""
+        return list_id == user_id or (list_id == model.FAMILY and self.family_access(user_id) != "none")
+
+    def can_edit(self, user_id: str, list_id: str) -> bool:
+        return list_id == user_id or (list_id == model.FAMILY and self.family_access(user_id) == "edit")
 
     @callback
     def subscribe(self, user_id: str, listener: Listener) -> Callable[[], None]:
@@ -98,8 +106,10 @@ class HomeTodo:
             "name": self.name,
             "version": self.version,
             "user": {"id": user.id, "name": user.name or "", "is_admin": user.is_admin},
-            "people": people,
-            "lists": {lid: model.shown(self.doc["lists"][lid]) for lid in (model.FAMILY, user.id)},
+            "people": [{**p, "family": self.family_access(p["id"])} for p in people],
+            "lists": {lid: model.shown(self.doc["lists"][lid]) for lid in (model.FAMILY, user.id)
+                      if self.can_use(user.id, lid)},
+            "access": {"family": self.family_access(user.id)},
             "prefs": self.doc["prefs"].get(user.id, {}),
         }
 
@@ -109,6 +119,8 @@ class HomeTodo:
         for one that's been ticked off."""
         if list_id != model.FAMILY:
             model.ensure_personal(self.doc, list_id)
+        if list_id == model.FAMILY:
+            self._only_for_editors(changes)
         lst = self.doc["lists"][list_id]
         before = model.snapshot(lst)
         remap = model.apply_changes(self.doc, list_id, changes, user_id=user.id)
@@ -122,6 +134,17 @@ class HomeTodo:
         for entry in finished:
             self._notify(entry["forBy"], f"{who} finished: {entry['text'] or '(untitled)'}")
         return {"rev": self.doc["rev"], "remap": remap}
+
+    def _only_for_editors(self, changes: Any) -> None:
+        """A request can only be for someone who can change Family, so they can tick it off."""
+        todos = changes.get("todos") if isinstance(changes, dict) else None
+        if not isinstance(todos, dict):
+            return
+        for key in ("add", "update"):
+            for raw in todos.get(key) if isinstance(todos.get(key), list) else []:
+                if isinstance(raw, dict) and isinstance(raw.get("for"), str) and raw["for"] \
+                        and self.family_access(raw["for"]) != "edit":
+                    raw["for"] = ""
 
     @callback
     def _notify(self, user_id: str, message: str) -> None:

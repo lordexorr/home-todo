@@ -13,7 +13,7 @@ from typing import Any
 from homeassistant.components.calendar import CalendarEntity, CalendarEvent
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers import area_registry as ar, device_registry as dr, entity_registry as er
 from homeassistant.helpers.device_registry import DeviceEntryType, DeviceInfo
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.util import dt as dt_util
@@ -95,14 +95,25 @@ class HomeTodoCalendar(CalendarEntity):
         """(list id, task) for each task on this calendar."""
         lists = self._todo.doc["lists"]
         own = [(self.list_id, t) for t in lists[self.list_id]["todos"]] if self.list_id in lists else []
-        if self.list_id == model.FAMILY:
+        if self.list_id == model.FAMILY or not self._todo.can_use(self.list_id, model.FAMILY):
             return own
         return own + [(model.FAMILY, t) for t in lists[model.FAMILY]["todos"] if t["for"] == self.list_id]
 
     def _event(self, list_id: str, task: dict[str, Any], day: date) -> CalendarEvent:
-        summary, description = model.event_text(task, self._todo.names)
+        summary, description = model.event_text(task, self._todo.names, self._place(task))
         return CalendarEvent(start=day, end=day + timedelta(days=1), summary=summary, description=description or None,
                              uid=f"{list_id}-{task['id']}-{day.isoformat()}")
+
+    def _place(self, task: dict[str, Any]) -> str:
+        """The area or device a task is linked to, by name: "Furnace (Basement)", or "Kitchen"."""
+        areas = ar.async_get(self.hass)
+        if task.get("device") and (device := dr.async_get(self.hass).async_get(task["device"])):
+            name = device.name_by_user or device.name or "a device"
+            area = areas.async_get_area(device.area_id) if device.area_id else None
+            return f"{name} ({area.name})" if area else name
+        if task.get("area") and (area := areas.async_get_area(task["area"])):
+            return area.name
+        return ""
 
     @property
     def event(self) -> CalendarEvent | None:

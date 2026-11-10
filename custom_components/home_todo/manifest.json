@@ -6,9 +6,9 @@
   "dependencies": ["frontend", "http", "panel_custom", "websocket_api"],
   "documentation": "https://github.com/lordexorr/home-todo",
   "integration_type": "service",
-  "iot_class": "local_polling",
+  "iot_class": "calculated",
   "issue_tracker": "https://github.com/lordexorr/home-todo/issues",
   "requirements": [],
   "single_config_entry": true,
-  "version": "0.5.0"
+  "version": "0.6.0"
 }

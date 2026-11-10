@@ -15,6 +15,8 @@ alone. Task numbers belong to a list, and a task keeps its number when it's comp
 A Family task can be for someone ("for", a user id): a request. "forBy" is whoever made it for them, as Home
 Assistant saw it, never as a page says. A log entry keeps both, and "from", the task it was ticked off from.
 
+A task can be linked to one area ("area", an area id) or one device ("device", a device id) in Home Assistant.
+
 A task can repeat. Ticked off, it goes to the log under a new number and stays open with its next due date. "from"
 says what that's counted from: "due", on a schedule from its due date, or "done", from the day it was ticked off."""
 from __future__ import annotations
@@ -36,6 +38,7 @@ REPEAT_MAX = 999  # the most days, weeks, months or years between repeats
 PRI_NAMES = {"hi": "High", "md": "Medium", "lo": "Low"}
 ARCHIVE_AFTER_MS = 365 * 24 * 3600 * 1000  # log entries older than this move to the archive
 TAIL = 20  # how many of the log's last entry numbers a page is sent, to check its copy is in step
+SAME_TICK_MS = 30_000  # a task ticked off on two pages this close together is logged once
 _DATE = re.compile(r"\d{4}-\d{2}-\d{2}")
 
 
@@ -154,6 +157,8 @@ def norm_todo(t: Any, now: int) -> dict:
         "repeat": norm_repeat(t.get("repeat")),
         "for": _text(t.get("for")),
         "forBy": _text(t.get("forBy")),
+        "area": _text(t.get("area")),
+        "device": _text(t.get("device")),
         "created": created,
         "updated": _int(t.get("updated")) or created,
     }
@@ -172,6 +177,8 @@ def norm_done(e: Any, now: int) -> dict:
         "from": _int(e.get("from")),
         "for": _text(e.get("for")),
         "forBy": _text(e.get("forBy")),
+        "area": _text(e.get("area")),
+        "device": _text(e.get("device")),
     }
 
 
@@ -339,6 +346,9 @@ def apply_changes(doc: dict, list_id: str, changes: Any, now: int | None = None,
             else:
                 source = tasks_before.get(item["from"] or item["id"])
                 item["for"], item["forBy"] = (source["for"], source["forBy"]) if source else ("", "")
+                if item["from"] and any(e["from"] == item["from"] and abs(e["ts"] - item["ts"]) < SAME_TICK_MS
+                                        for e in items):
+                    continue  # ticked off on another page at the same moment, or sent again: logged once
             if item["id"] in where and items[where[item["id"]]] == item:
                 continue  # sent again after a dropped connection, and already here
             taken = {x["id"] for x in lst["todos"] + lst["done"] + lst["archive"]}
@@ -454,14 +464,17 @@ def repeat_text(rep: dict) -> str:
     return f"Repeats {every}, " + ("counted from when it's done" if rep["from"] == "done" else "on a schedule")
 
 
-def event_text(todo: dict, names: dict[str, str] | None = None) -> tuple[str, str]:
-    """A task's title and details, as its calendar event shows them. names: each user's name, by id."""
+def event_text(todo: dict, names: dict[str, str] | None = None, place: str = "") -> tuple[str, str]:
+    """A task's title and details, as its calendar event shows them. names: each user's name, by id. place: the
+    area or device it's linked to, by name."""
     lines = []
     if todo.get("category"):
         lines.append(f"Category: {todo['category']}")
     lines.append(f"Priority: {PRI_NAMES.get(todo.get('pri'), 'Medium')}")
     if todo.get("for"):
         lines.append(f"For: {(names or {}).get(todo['for'], 'someone')}")
+    if place:
+        lines.append(f"Linked to: {place}")
     if todo.get("repeat"):
         lines.append(repeat_text(todo["repeat"]))
     if todo.get("status") == "waiting":

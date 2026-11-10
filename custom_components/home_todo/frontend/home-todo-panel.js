@@ -91,7 +91,7 @@ class HomeTodoPanel extends HTMLElement {
     const bar = this.querySelector(".topbar");
     if (!bar) return;
     const btn = document.createElement("button");
-    btn.className = "themebtn";
+    btn.className = "menubtn";
     btn.title = "Home Assistant menu";
     btn.setAttribute("aria-label", "Open Home Assistant's sidebar");
     btn.innerHTML = MENU_ICON;

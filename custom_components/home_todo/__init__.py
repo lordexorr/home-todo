@@ -15,7 +15,7 @@ from homeassistant.helpers.typing import ConfigType
 from homeassistant.loader import async_get_integration
 
 from . import websocket
-from .const import CONF_NAME, DEFAULT_NAME, DOMAIN, PANEL, STATIC_URL
+from .const import CONF_FAMILY_NONE, CONF_FAMILY_VIEW, CONF_NAME, DEFAULT_NAME, DOMAIN, PANEL, STATIC_URL
 from .runtime import HomeTodo
 
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
@@ -35,7 +35,8 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
 async def async_setup_entry(hass: HomeAssistant, entry: HomeTodoConfigEntry) -> bool:
     name = entry.options.get(CONF_NAME) or DEFAULT_NAME
     version = str((await async_get_integration(hass, DOMAIN)).version)
-    todo = HomeTodo(hass, name, version)
+    todo = HomeTodo(hass, name, version, view_only=entry.options.get(CONF_FAMILY_VIEW, []),
+                    no_access=entry.options.get(CONF_FAMILY_NONE, []))
     await todo.async_load()
     entry.runtime_data = todo
     entry.async_on_unload(async_track_time_change(hass, todo.archive_old, hour=3, minute=0, second=0))
@@ -48,6 +49,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: HomeTodoConfigEntry) -> 
     )
     entry.async_on_unload(lambda: frontend.async_remove_panel(hass, PANEL))
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+    if entry.title != name:  # Devices & services shows the name too
+        hass.config_entries.async_update_entry(entry, title=name)
     # A new name under Configure starts everything again, so the sidebar and every open page show it.
     entry.async_on_unload(entry.add_update_listener(_async_reload))
     return True

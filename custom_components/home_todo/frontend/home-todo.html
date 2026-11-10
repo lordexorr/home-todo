@@ -182,11 +182,11 @@
   .clock .d{ font-size:10.5px; color:var(--ink-4); }
 
   /* session / file link pill */
-  .themebtn{ display:flex; align-items:center; justify-content:center; width:32px; height:32px; border-radius:8px;
+  .menubtn{ display:flex; align-items:center; justify-content:center; width:32px; height:32px; border-radius:8px;
     background:var(--raise); border:1px solid var(--line-2); color:var(--ink-3); flex:0 0 auto;
     transition:color .15s, border-color .15s; }
-  .themebtn:hover{ color:var(--ink); border-color:var(--line-3); }
-  .themebtn svg{ width:15px; height:15px; }
+  .menubtn:hover{ color:var(--ink); border-color:var(--line-3); }
+  .menubtn svg{ width:15px; height:15px; }
   .session{ position:relative; }
   .spill{ display:flex; align-items:center; gap:8px; height:32px; padding:0 11px; border-radius:8px;
     background:var(--raise); border:1px solid var(--line-2); color:var(--ink-2); font-size:12px; transition:border-color .15s, color .15s; }
@@ -384,6 +384,23 @@
   .row.arcrow .text{ color:var(--ink-2); }
   .forbadge{ display:inline-flex; align-items:center; font-size:10.5px; font-weight:600; padding:1px 7px;
     border-radius:5px; border:1px solid var(--line-2); color:var(--ink-2); background:var(--raise); }
+  .linkbadge{ display:inline-flex; align-items:center; gap:4px; font-size:10.5px; font-weight:600; padding:1px 7px;
+    border-radius:5px; border:1px solid var(--line-2); color:var(--ink-2); background:var(--raise); }
+  .linkbadge svg{ width:10px; height:10px; flex:0 0 auto; }
+  .linkbadge.go{ cursor:pointer; }
+  .linkbadge.go:hover{ color:var(--accent); border-color:var(--accent-line); background:var(--accent-soft); }
+  .lpick-pop{ width:300px; }
+  .lpick-rows{ max-height:260px; overflow:auto; margin-top:7px; }
+  .lpick-head{ padding:7px 8px 3px; font-size:10px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:var(--ink-4); }
+  .lpick-row{ display:flex; align-items:baseline; gap:8px; padding:6px 8px; border-radius:6px; cursor:pointer; font-size:12.5px; }
+  .lpick-row:hover{ background:var(--raise); }
+  .lpick-row .sub{ margin-left:auto; color:var(--ink-3); font-size:11.5px; white-space:nowrap; }
+  .ropill{ display:inline-flex; align-items:center; padding:3px 9px; border-radius:999px; font-size:11px; font-weight:600;
+    color:var(--warn); border:1px solid var(--warn); background:var(--warn-soft); white-space:nowrap; }
+  /* View only: Family can be read, and nothing on it changed. */
+  body.ro .addrow, body.ro .grip, body.ro .check, body.ro .rowbtn, body.ro #subNew, body.ro #subClear,
+  body.ro .cat-row .x{ display:none !important; }
+  body.ro .pri, body.ro #detail, body.ro #subList{ pointer-events:none; }
   .forbadge.me{ color:var(--accent); border-color:var(--accent-line); background:var(--accent-soft); }
   .row.forme{ box-shadow:inset 2px 0 0 var(--accent); }
   .fcount{ display:inline-flex; align-items:center; justify-content:center; min-width:17px; height:17px; margin-left:6px;
@@ -605,6 +622,7 @@
   <div class="seg lists" id="listSeg" role="group" aria-label="List">
     <button type="button" data-list="mine" id="listMine">Mine</button><button type="button" data-list="family">Family</button>
   </div>
+  <span class="ropill" id="roPill" hidden title="You can see the Family list, but not change it">View only</span>
 
   <div class="metrics">
     <div class="metric lead"><span class="v" id="mToday">0</span><span class="l">Logged today</span></div>
@@ -769,6 +787,17 @@
           <span class="dlabel">For</span>
           <select class="field forsel" id="dFor" title="Who it's for"></select>
         </div>
+        <div class="drow" id="dLinkRow" hidden>
+          <span class="dlabel">Link</span>
+          <div class="rpick lpick" id="dLink">
+            <button type="button" class="rpick-btn" id="dLinkBtn" title="An area or device this task is about"></button>
+            <div class="rpick-pop lpick-pop">
+              <input type="text" class="field grow lpick-search" placeholder="Find an area or device…" autocomplete="off">
+              <div class="lpick-rows scrolly"></div>
+              <div class="rpick-acts"><button type="button" class="ghost" id="dLinkClear">No link</button></div>
+            </div>
+          </div>
+        </div>
         <div class="drow" id="dWaitRow" hidden>
           <input class="field grow" id="dWaitOn" placeholder="Waiting on… (a delivery, a call back, a contractor)" autocomplete="off">
           <span class="dlabel">Follow up</span>
@@ -856,6 +885,7 @@
         <span class="c">resume &lt;#&gt;</span><span class="d">Move a waiting task back to active.</span>
         <span class="c">pri &lt;#&gt; &lt;hi|md|lo&gt;</span><span class="d">Set priority.</span>
         <span class="c">for &lt;#&gt; &lt;name&gt;</span><span class="d">Make a Family task a request for someone, or <code>none</code> to take it off them.</span>
+        <span class="c">link &lt;#&gt; &lt;name&gt;</span><span class="d">Link a task to an area or device in Home Assistant, by the start of its name, or <code>none</code>.</span>
         <span class="c">repeat &lt;#&gt; &lt;how&gt;</span><span class="d">Make a task repeat: <code>*1w</code> on a schedule, <code>~3mo</code> after it's done, or <code>none</code>.</span>
         <span class="c">sub &lt;#&gt; &lt;text&gt;</span><span class="d">Add a side task under a task. <code>step</code> works too.</span>
         <span class="c">note &lt;text&gt;</span><span class="d">Append a line to whichever notes are open — the selected task, or the scratchpad.</span>
@@ -865,7 +895,8 @@
       <div class="msub">Lists</div>
       <div class="mnote" style="margin-top:0;padding-top:0;border:0">
         <b>Mine</b> is your own list, and only you see it, unless you put it on Home Assistant's calendar under
-        Settings. <b>Family</b> is shared: everyone who uses Home To-Do
+        Settings. <b>Family</b> is shared: an administrator can make it view only, or hidden, for someone under
+        <b>Configure</b> on Home To-Do's entry. Otherwise everyone who uses Home To-Do
         sees it and can change it. Switch between them with the buttons beside the logo. Each list has its own
         tasks, log, scratchpad, task numbers and categories, so categories made on Mine stay yours.
       </div>
@@ -888,6 +919,12 @@
         A start of a name is enough, and <code>&gt;Name</code> from Mine puts the task on Family.<br>
         They're told on their phone, and you're told when they've done it, once each of you has chosen where under
         <b>Settings</b>. Tasks for you are marked, and the <b>Family</b> button counts them.
+      </div>
+      <div class="msub">Links to areas and devices</div>
+      <div class="mnote" style="margin-top:0;padding-top:0;border:0">
+        A task can be linked to an area or a device in Home Assistant, such as "Replace the filter" and the furnace:
+        choose it under <b>Link</b> in the task's details, or type <code>link 12 furnace</code>. The task shows what
+        it's linked to, which administrators can click to open in Home Assistant, and <code>find</code> searches it.
       </div>
       <div class="msub">Repeating tasks</div>
       <div class="mnote" style="margin-top:0;padding-top:0;border:0">
@@ -963,7 +1000,7 @@
     return {
       id: +t.id || 0,
       text: String(t.text||""),
-      category: t.category || t.client || null,
+      category: t.category || null,
       pri: (t.pri==="hi"||t.pri==="lo") ? t.pri : "md",
       status: t.status==="waiting" ? "waiting" : "open",
       waitingOn: t.waitingOn ? String(t.waitingOn) : "",
@@ -975,6 +1012,8 @@
       repeat: normRepeat(t.repeat),
       for: typeof t.for === "string" ? t.for : "",           // who it's for: a request, on Family
       forBy: typeof t.forBy === "string" ? t.forBy : "",     // who asked, as Home Assistant recorded it
+      area: typeof t.area === "string" ? t.area : "",        // an area it's linked to
+      device: typeof t.device === "string" ? t.device : "",  // or a device
       created: +t.created || Date.now(),
       updated: +t.updated || +t.created || Date.now()
     };
@@ -983,13 +1022,15 @@
     return {
       id: +e.id || 0,
       text: String(e.text||""),
-      category: e.category || e.client || null,
+      category: e.category || null,
       ts: +e.ts || Date.now(),
       subs: normSubs(e.subs),
       notes: String(e.notes||""),
       from: +e.from || 0,                                     // the task it was ticked off from
       for: typeof e.for === "string" ? e.for : "",
-      forBy: typeof e.forBy === "string" ? e.forBy : ""
+      forBy: typeof e.forBy === "string" ? e.forBy : "",
+      area: typeof e.area === "string" ? e.area : "",
+      device: typeof e.device === "string" ? e.device : ""
     };
   }
   // How often a task repeats, or null. "from" is what the next due date counts from: "due", on a schedule, or
@@ -1089,14 +1130,16 @@
   var booted = false, online = false, failed = false, inflight = 0, connMsg = "", leaving = false;
   var queue = [];                                   // what Home Assistant sent while edits were on their way
   var active = "";                                  // id of the list on screen
-  var sent = { decks:{}, prefs:"" };       // what this page has sent: edits are measured from here
-  var acked = { decks:{}, prefs:"" };      // what Home Assistant has confirmed it has
+  var sent = { lists:{}, prefs:"" };       // what this page has sent: edits are measured from here
+  var acked = { lists:{}, prefs:"" };      // what Home Assistant has confirmed it has
   var outdated = false;                     // Home Assistant is running another version of Home To-Do
   var people = [];                          // everyone with a login: who a request can be for
+  var familyAccess = "edit";                // "edit", "view" (it can be seen, not changed) or "none", set under Configure
+  function readOnly(){ return active === "family" && familyAccess === "view"; }
   var ERR_CONNECTION_LOST = 3;                      // home-assistant-js-websocket's code for a dropped connection
 
   function clone(v){ return JSON.parse(JSON.stringify(v)); }
-  function normDeck(d){
+  function normList(d){
     d = (d && typeof d === "object") ? d : {};
     return {
       id: String(d.id || ""),
@@ -1109,14 +1152,14 @@
     };
   }
   function listId(kind){ return kind === "family" ? "family" : (me ? me.id : ""); }
-  function deckNow(){
+  function listNow(){
     return { id:active, seq:S.seq, todos:clone(S.todos), done:clone(S.done), notes:S.notes, categories:S.categories.slice(),
              archived:S.archived };
   }
   // keep: the same list again, from Home Assistant. Its tasks are updated in place, so anything still holding one,
   // such as an Undo, keeps working.
   function loadActive(keep){
-    var d = sent.decks[active], maxId = 0;
+    var d = sent.lists[active], maxId = 0;
     S.todos = keep ? reuse(S.todos, clone(d.todos)) : clone(d.todos);
     S.done = keep ? reuse(S.done, clone(d.done)) : clone(d.done);
     S.notes = d.notes;
@@ -1156,7 +1199,7 @@
     return (out.add.length || out.update.length || out.remove.length || out.order) ? out : null;
   }
   function listChanges(){
-    var d = sent.decks[active];
+    var d = sent.lists[active];
     if(!d) return null;
     var ch = {}, any = false, t = diffItems(S.todos, d.todos), e = diffItems(S.done, d.done);
     if(t){ ch.todos = t; any = true; }
@@ -1174,12 +1217,16 @@
   // once the connection is back.
   function save(){
     if(!booted || !online){ setSyncUI(); return; }
-    var ch = listChanges();
+    if(readOnly() && listChanges()){
+      loadActive(true); syncAll();
+      toast("The Family list is view only for you", "warn");
+    }
+    var ch = readOnly() ? null : listChanges();
     if(ch){
-      var deck = deckNow(), id = active;
-      sent.decks[id] = deck;
+      var copy = listNow(), id = active;
+      sent.lists[id] = copy;
       send({ type:"home_todo/apply", list_id:id, changes:ch }, function(res){
-        acked.decks[id] = deck;
+        acked.lists[id] = copy;
         if(res && res.remap) remapIds(id, res.remap);
       });
     }
@@ -1215,7 +1262,7 @@
       var m = remap[key] || {};
       Object.keys(m).forEach(function(from){
         var a = +from, b = +m[from];
-        var arrays = [sent.decks[id] && sent.decks[id][key], acked.decks[id] && acked.decks[id][key]];
+        var arrays = [sent.lists[id] && sent.lists[id][key], acked.lists[id] && acked.lists[id][key]];
         if(id === active) arrays.push(S[key]);
         arrays.forEach(function(arr){ (arr || []).forEach(function(x){ if(x.id === a) x.id = b; }); });
         if(id === active){
@@ -1250,6 +1297,12 @@
         return;
       }
       me = ev.user || me;
+      familyAccess = ev.access && /^(edit|view|none)$/.test(ev.access.family) ? ev.access.family : "edit";
+      if(familyAccess === "none" && booted){
+        // Family has been taken away: the page goes back to Mine.
+        delete sent.lists.family; delete acked.lists.family;
+        if(active === "family"){ active = listId("mine"); selected = null; editing = null; loadActive(); syncAll(); }
+      }
       if(Array.isArray(ev.people)){
         people = ev.people.filter(function(x){ return x && typeof x.id === "string" && typeof x.name === "string"; });
         renderForPickers();
@@ -1297,16 +1350,16 @@
     var lists = ev.lists || {}, patches = ev.patches || {}, sig = notesSig(), ok = true;
     var before = JSON.stringify([S.todos, S.done, S.notes, S.categories, S.archived]);
     Object.keys(lists).forEach(function(id){
-      var d = normDeck(lists[id]);
-      sent.decks[id] = d; acked.decks[id] = clone(d);
+      var d = normList(lists[id]);
+      sent.lists[id] = d; acked.lists[id] = clone(d);
       if(archive.list === id) archive = { list:"", entries:null, loading:false };
       if(id === active) loadActive(true);
     });
     Object.keys(patches).forEach(function(id){
-      if(!ok || !acked.decks[id]) return;
-      var d = clone(acked.decks[id]), was = d.archived;
+      if(!ok || !acked.lists[id]) return;
+      var d = clone(acked.lists[id]), was = d.archived;
       if(!applyPatch(d, patches[id])){ ok = false; return; }
-      sent.decks[id] = d; acked.decks[id] = clone(d);
+      sent.lists[id] = d; acked.lists[id] = clone(d);
       if(archive.list === id && d.archived !== was) archive = { list:"", entries:null, loading:false };
       if(id === active) loadActive(true);
     });
@@ -1327,13 +1380,13 @@
   }
   function start(ev){
     Object.keys(ev.lists || {}).forEach(function(id){
-      var d = normDeck(ev.lists[id]);
-      sent.decks[id] = d; acked.decks[id] = clone(d);
+      var d = normList(ev.lists[id]);
+      sent.lists[id] = d; acked.lists[id] = clone(d);
     });
     adoptPrefs(ev.prefs);
     sent.prefs = acked.prefs = prefsNow();
     active = listId(S.ui.list);
-    if(!sent.decks[active]) active = "family";
+    if(!sent.lists[active]) active = sent.lists[listId("mine")] ? listId("mine") : "family";
     loadActive();
     booted = true; online = true;
     applyUi(); renderListSeg(); syncAll();
@@ -1362,7 +1415,8 @@
   }
   function switchList(kind){
     var id = listId(kind);
-    if(!booted || !online || id === active || !sent.decks[id]) return;
+    if(!booted || !online || id === active || !sent.lists[id]) return;
+    if(id === "family" && familyAccess === "none") return;
     save();                                   // anything still waiting on this list goes first
     active = id; S.ui.list = kind;
     selected = null; editing = null;
@@ -1391,21 +1445,85 @@
     ["todoFor","dFor"].forEach(function(id){
       var sel = $(id), was = sel.value;
       sel.innerHTML = '<option value="">' + (id === "todoFor" ? "For anyone" : "Anyone") + '</option>' +
-        people.map(function(x){
+        people.filter(function(x){ return x.family !== "view" && x.family !== "none"; }).map(function(x){
           return '<option value="' + esc(x.id) + '">' + esc(x.name) + (me && x.id === me.id ? " (me)" : "") + '</option>';
         }).join("");
       sel.value = was;
     });
   }
   function forMe(t){ return !!(me && t.for === me.id); }
+
+  // Areas and devices, as Home Assistant has them now.
+  var LINKICON = '<svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">' +
+    '<path d="M5 7a2.2 2.2 0 0 0 3.1 0l1.6-1.6a2.2 2.2 0 0 0-3.1-3.1L6 2.9"/><path d="M7 5a2.2 2.2 0 0 0-3.1 0L2.3 6.6a2.2 2.2 0 0 0 3.1 3.1L6 9.1"/></svg>';
+  function haAreas(){ var h = HOST && HOST.hass; return (h && h.areas) || {}; }
+  function haDevices(){ var h = HOST && HOST.hass; return (h && h.devices) || {}; }
+  function deviceName(d){ return (d && (d.name_by_user || d.name)) || "a device"; }
+  // What a task is linked to, as it's shown: "Furnace · Basement" for a device in an area, or an area's name.
+  function linkLabel(t){
+    if(t.device){
+      var d = haDevices()[t.device];
+      if(!d) return Object.keys(haDevices()).length ? "a removed device" : "a device";   // or not loaded yet
+      var a = d.area_id && haAreas()[d.area_id];
+      return deviceName(d) + (a ? " · " + a.name : "");
+    }
+    if(t.area){ var ar = haAreas()[t.area]; return ar ? ar.name : Object.keys(haAreas()).length ? "a removed area" : "an area"; }
+    return "";
+  }
+  // Where it is in Home Assistant's settings, which only administrators can open.
+  function linkPath(t){
+    if(t.device && haDevices()[t.device]) return "/config/devices/device/" + encodeURIComponent(t.device);
+    if(t.area && haAreas()[t.area]) return "/config/areas/area/" + encodeURIComponent(t.area);
+    return "";
+  }
+  function linkBadge(t){
+    if(!t.area && !t.device) return "";
+    var path = me && me.is_admin ? linkPath(t) : "";
+    return '<span class="linkbadge' + (path ? ' go" data-open="' + esc(path) + '" title="Open in Home Assistant' : "") + '">' +
+      LINKICON + esc(linkLabel(t)) + '</span>';
+  }
+  // Every area, then every device that's turned on, for the picker and the link command.
+  function linkChoices(){
+    var areas = haAreas(), devices = haDevices(), out = [], list = [];
+    Object.keys(areas).forEach(function(id){ out.push({ kind:"area", id:id, name:areas[id].name || id, sub:"" }); });
+    Object.keys(devices).forEach(function(id){
+      var d = devices[id] || {};
+      if(d.disabled_by) return;
+      var a = d.area_id && areas[d.area_id];
+      list.push({ kind:"device", id:id, name:deviceName(d), sub:a ? a.name : "" });
+    });
+    var byName = function(x, y){ return x.name.localeCompare(y.name); };
+    return out.sort(byName).concat(list.sort(byName));
+  }
+  // An area or device by its name, whole or the start of it, areas first. {many} when several start that way.
+  function findLink(raw){
+    var key = categoryKey(raw);
+    if(!key) return null;
+    var all = linkChoices();
+    var exact = all.filter(function(c){ return categoryKey(c.name) === key; });
+    if(exact.length) return exact[0];
+    var hits = all.filter(function(c){ return categoryKey(c.name).indexOf(key) === 0; });
+    return hits.length === 1 ? hits[0] : hits.length ? { many:hits.length } : null;
+  }
+  // Opens a page of Home Assistant's own, in the window around this one.
+  function openInHA(path){
+    try{
+      window.parent.history.pushState(null, "", path);
+      window.parent.dispatchEvent(new CustomEvent("location-changed", { detail:{ replace:false } }));
+    }catch(e){ window.open(path, "_blank"); }
+  }
   function renderListSeg(){
     var kind = active === "family" ? "family" : "mine";
     // The Family button counts the Family tasks that are for you.
-    var family = active === "family" ? S.todos : ((sent.decks.family || {}).todos || []);
+    var family = active === "family" ? S.todos : ((sent.lists.family || {}).todos || []);
     var n = family.filter(forMe).length, fb = document.querySelector('#listSeg button[data-list="family"]');
     fb.innerHTML = "Family" + (n ? '<span class="fcount">' + n + '</span>' : "");
     fb.title = n ? n + " Family task" + (n === 1 ? " is" : "s are") + " for you" : "";
     $("todoFor").hidden = active !== "family";
+    fb.hidden = familyAccess === "none";
+    $("roPill").hidden = !readOnly();
+    document.body.classList.toggle("ro", readOnly());
+    notesEl.readOnly = readOnly();
     Array.prototype.forEach.call(document.querySelectorAll("#listSeg button"), function(b){
       b.classList.toggle("on", b.getAttribute("data-list") === kind);
     });
@@ -1676,7 +1794,12 @@
   function removeCategory(name){
     S.categories = S.categories.filter(function(c){ return c !== name; });
     ["todo","log"].forEach(function(k){ if(pick[k] === name) setPick(k, null); });
-    save(); renderPops(); toast("Removed " + name + " from the category list", "info");
+    save(); renderPops();
+    toast("Removed " + name + " from the category list", "info", function(){
+      if(categoryByKey(categoryKey(name))) return;          // added again meanwhile
+      S.categories.push(name);
+      save(); renderPops();
+    });
   }
   function setupPicker(field){
     var key = field.getAttribute("data-target");
@@ -1739,6 +1862,7 @@
            (item.notes || "").toLowerCase().indexOf(q) >= 0 ||
            (item.waitingOn || "").toLowerCase().indexOf(q) >= 0 ||
            (item.for ? personName(item.for).toLowerCase().indexOf(q) >= 0 : false) ||
+           ((item.area || item.device) ? linkLabel(item).toLowerCase().indexOf(q) >= 0 : false) ||
            ((item.subs || []).some(function(sb){
              return sb.text.toLowerCase().indexOf(q) >= 0 || sb.notes.toLowerCase().indexOf(q) >= 0;
            }));
@@ -1768,6 +1892,7 @@
     var sub = [];
     var dm = t.due ? dueMeta(t.due) : null;
     if(dm) sub.push('<span class="due ' + dm.cls + '" title="' + esc(dm.title) + '">' + esc(dm.text) + '</span>');
+    if(t.area || t.device) sub.push(linkBadge(t));
     if(t.for) sub.push('<span class="forbadge' + (forMe(t) ? " me" : "") + '">For ' +
       esc(forMe(t) ? "you" : personName(t.for)) + '</span>');
     if(t.repeat) sub.push('<span class="rbadge" title="' + esc(repeatText(t.repeat)) + '">\u21BB ' + esc(repeatShort(t.repeat)) + '</span>');
@@ -1781,8 +1906,8 @@
     }
     if(t.notes.trim()) sub.push('<span class="hasnote" title="Has notes">' + NOTEICON + (t.notes.trim().split(/\n/).length) + '</span>');
     var st = subStats(t);
-    if(st.total) sub.push('<button class="subtoggle' + (t.subsOpen ? " open" : "") + (st.done === st.total ? " all" : "") +
-      '" data-subtoggle="' + t.id + '" title="' + (t.subsOpen ? "Hide" : "Show") + ' side tasks">' +
+    if(st.total) sub.push('<button class="subtoggle' + (subsShown(t) ? " open" : "") + (st.done === st.total ? " all" : "") +
+      '" data-subtoggle="' + t.id + '" title="' + (subsShown(t) ? "Hide" : "Show") + ' side tasks">' +
       '<span class="cv">\u25B8</span>' + st.done + '/' + st.total + '</button>');
     var isSel = selected && selected.type === "todo" && selected.id === t.id;
     return '<div class="row todo' + (t.status === "waiting" ? " waiting" : "") + (isSel ? " sel" : "") + (forMe(t) ? " forme" : "") +
@@ -1800,7 +1925,7 @@
       '</div></div>' + subListHtml(t);
   }
   function subListHtml(t){
-    if(!t.subsOpen || !t.subs.length) return "";
+    if(!subsShown(t) || !t.subs.length) return "";
     return '<div class="subs">' + t.subs.map(function(sb){
       return '<div class="subrow-l' + (sb.done ? " done" : "") + '" data-sid="' + sb.id + '">' +
         '<button class="check sm' + (sb.done ? " on" : "") + '" data-subcheck="' + sb.id + '" data-parent="' + t.id +
@@ -1810,6 +1935,8 @@
         '</div>';
     }).join("") + '</div>';
   }
+  var roSubs = {};                       // side tasks shown on this page only, when Family is view only
+  function subsShown(t){ return readOnly() ? !!roSubs[t.id] : t.subsOpen; }
   function wrapTask(t){ return '<div class="taskwrap" data-id="' + t.id + '">' + todoRow(t) + '</div>'; }
   function renderTodos(){
     var all = S.todos.filter(matches);
@@ -1908,6 +2035,7 @@
         if(est.total) subBits.push('<span class="subcount">' + est.done + '/' + est.total + ' done</span>');
         if(e.notes.trim()) subBits.push('<span class="hasnote">' + NOTEICON + e.notes.trim().split(/\n/).length + '</span>');
         if(e.for) subBits.push('<span class="forbadge">For ' + esc(forMe(e) ? "you" : personName(e.for)) + '</span>');
+        if(e.area || e.device) subBits.push(linkBadge(e));
         var sub = subBits.length ? '<div class="rsub">' + subBits.join("") + '</div>' : '';
         h += '<div class="row logrow' + (isSel ? " sel" : "") + (flashIds[e.id] ? " flash" : "") +
             '" data-id="' + e.id + '" data-kind="done">' +
@@ -2026,6 +2154,10 @@
       $("dWaitRow").hidden = !(isTodo && item.status === "waiting");
       $("dRepRow").hidden = !isTodo;
       $("dForRow").hidden = !(isTodo && active === "family");
+      $("dLinkRow").hidden = !isTodo;
+      $("dLinkBtn").textContent = isTodo && (item.area || item.device) ? linkLabel(item) : "Nothing";
+      $("dLinkBtn").classList.toggle("on", !!(isTodo && (item.area || item.device)));
+      $("dTitle").readOnly = readOnly();
       if(isTodo) $("dFor").value = item.for || "";
       renderRepeatPicker("detail");
       renderSubs();
@@ -2267,7 +2399,7 @@
     var idx = S.todos.indexOf(t);
     S.todos = S.todos.filter(function(x){ return x.id !== id; });
     var entry = normDone({ id:t.id, category:t.category, text:t.text, ts:Date.now(), notes:t.notes, subs:t.subs,
-                           from:t.id, for:t.for, forBy:t.forBy });
+                           from:t.id, for:t.for, forBy:t.forBy, area:t.area, device:t.device });
     S.done.push(entry);
     if(selected && selected.type === "todo" && selected.id === id) selected = { type:"done", id:id };
     doFlash(t.id); save(); syncAll();
@@ -2284,7 +2416,7 @@
     var keep = ["due","subs","status","waitingOn","followUp","updated","repeat"], before = {};
     keep.forEach(function(k){ before[k] = clone(t[k]); });
     var entry = normDone({ id:S.seq++, category:t.category, text:t.text, ts:Date.now(), notes:t.notes, subs:clone(t.subs),
-                           from:t.id, for:t.for, forBy:t.forBy });
+                           from:t.id, for:t.for, forBy:t.forBy, area:t.area, device:t.device });
     S.done.push(entry);
     t.due = nextDue(t, todayStr());
     anchorRepeat(t);
@@ -2305,11 +2437,20 @@
     save(); syncAll();
     toast(who ? "#" + id + " is for " + (forMe(t) ? "you" : personName(who)) : "#" + id + " is no longer for anyone", "info");
   }
+  function setLink(id, choice){
+    var t = findTodo(id); if(!t) return;
+    t.area = choice && choice.kind === "area" ? choice.id : "";
+    t.device = choice && choice.kind === "device" ? choice.id : "";
+    t.updated = Date.now();
+    save(); syncAll();
+    toast(choice ? "#" + id + " is linked to " + linkLabel(t) : "#" + id + " is no longer linked", "info");
+  }
   // A request typed with >Name always goes on Family.
   function addRequest(p, fallbackCategory){
     if(active !== "family"){
       switchList("family");
       if(active !== "family"){ toast("Couldn't switch to Family to add the request", "err"); return; }
+      if(readOnly()){ toast("The Family list is view only for you", "warn"); return; }
       fallbackCategory = null;                 // categories belong to their list
     }
     addTodo(p.text, p.category || fallbackCategory, p.pri || "md", p.due || "", p.repeat, p.forWho);
@@ -2362,6 +2503,7 @@
     toast(due ? "#" + id + " due " + due : "Due date cleared on #" + id, "info");
   }
   function startEdit(type, id){
+    if(readOnly()) return;
     editing = { type:type, id:id };
     renderTodos(); renderLog();
     var inp = document.querySelector(".edit-input");
@@ -2463,6 +2605,8 @@
                   unwait:"resume", active:"resume", priority:"pri", search:"find", filter:"find",
                   step:"sub", subtask:"sub", every:"repeat", recur:"repeat" };
     cmd = ALIAS[cmd] || cmd;
+    var CHANGES = ["add","log","done","due","wait","resume","pri","sub","note","for","repeat","link"];
+    if(readOnly() && CHANGES.indexOf(cmd) >= 0){ toast("The Family list is view only for you", "warn"); return; }
 
     if(cmd === "add"){
       var p = parseTags(args);
@@ -2505,6 +2649,15 @@
       if(!mapl[lvl]){ toast("Try: pri " + pid + " hi", "err"); return; }
       var tt = findTodo(pid); tt.pri = mapl[lvl]; tt.updated = Date.now();
       save(); syncAll(); toast("#" + pid + " set to " + PLABEL[tt.pri].toLowerCase(), "info");
+    }
+    else if(cmd === "link"){
+      var lid = parseInt(args[0], 10), what = args.slice(1).join(" ").trim();
+      if(isNaN(lid) || !findTodo(lid)){ toast("No open task #" + (args[0] || ""), "err"); return; }
+      if(/^(none|nothing|off)$/i.test(what)){ setLink(lid, null); return; }
+      var found = findLink(what);
+      if(!found){ toast(what ? "No area or device called " + what : "Try: link " + lid + " furnace", "err"); return; }
+      if(found.many){ toast(found.many + " areas and devices start with " + what + " — type more of the name", "err"); return; }
+      setLink(lid, found);
     }
     else if(cmd === "for"){
       var qid = parseInt(args[0], 10), whoRaw = args.slice(1).join(" ").trim();
@@ -2830,9 +2983,11 @@
         setTimeout(function(){ delete ticking[cid]; }, 800);
         return;
       }
+      if((t = e.target.closest("[data-open]"))){ openInHA(t.getAttribute("data-open")); return; }
       if((t = e.target.closest("[data-subtoggle]"))){
         var tt = findTodo(+t.getAttribute("data-subtoggle"));
-        if(tt){ tt.subsOpen = !tt.subsOpen; save(); renderTodos(); }
+        if(tt && readOnly()){ roSubs[tt.id] = !roSubs[tt.id]; renderTodos(); }
+        else if(tt){ tt.subsOpen = !tt.subsOpen; save(); renderTodos(); }
         return;
       }
       if((t = e.target.closest("[data-subcheck]"))){
@@ -2924,6 +3079,42 @@
       t.updated = Date.now();
       save(); syncLists(); renderNotes();
       if(v === "waiting") setTimeout(function(){ $("dWaitOn").focus(); }, 30);
+    });
+    var linkEl = $("dLink"), linkSearch = linkEl.querySelector(".lpick-search");
+    function renderLinkRows(){
+      var q = categoryKey(linkSearch.value), h = "", last = "", shown = 0;
+      linkChoices().forEach(function(c){
+        if(shown >= 80 || (q && categoryKey(c.name).indexOf(q) < 0 && categoryKey(c.sub).indexOf(q) < 0)) return;
+        if(c.kind !== last){ h += '<div class="lpick-head">' + (c.kind === "area" ? "Areas" : "Devices") + '</div>'; last = c.kind; }
+        h += '<div class="lpick-row" data-kind="' + c.kind + '" data-id="' + esc(c.id) + '"><span>' + esc(c.name) + '</span>' +
+          (c.sub ? '<span class="sub">' + esc(c.sub) + '</span>' : '') + '</div>';
+        shown++;
+      });
+      linkEl.querySelector(".lpick-rows").innerHTML = h || '<div class="cat-msg">Nothing matches</div>';
+    }
+    function pickLink(row){
+      var t = selectedTodo();
+      if(row && t) setLink(t.id, { kind:row.getAttribute("data-kind"), id:row.getAttribute("data-id") });
+      linkEl.classList.remove("open");
+    }
+    $("dLinkBtn").addEventListener("click", function(){
+      var open = !linkEl.classList.contains("open");
+      closeRepeatPickers();
+      if(!open || readOnly()) return;
+      linkSearch.value = "";
+      renderLinkRows();
+      linkEl.classList.add("open");
+      placeRepeatPop(linkEl);
+      linkSearch.focus();
+    });
+    linkSearch.addEventListener("input", renderLinkRows);
+    linkSearch.addEventListener("keydown", function(e){
+      if(e.key === "Enter"){ e.preventDefault(); pickLink(linkEl.querySelector(".lpick-row")); }
+    });
+    linkEl.querySelector(".lpick-rows").addEventListener("click", function(e){ pickLink(e.target.closest(".lpick-row")); });
+    $("dLinkClear").addEventListener("click", function(){
+      var t = selectedTodo(); if(t) setLink(t.id, null);
+      linkEl.classList.remove("open");
     });
     $("dFor").addEventListener("change", function(){
       var t = selectedTodo(); if(t && active === "family") setFor(t.id, $("dFor").value);
@@ -3217,7 +3408,7 @@
   window.HOMETODO = { state:S, parseWhen:parseWhen, run:runCommand,
     parseTags:parseTags, categoryToken:categoryToken, categoryKey:categoryKey, theme:applyTheme,
     addSub:addSub, subStats:subStats, nextDue:nextDue, parseRepeat:parseRepeat, linkUrl:linkUrl, setField:setField,
-    findPerson:findPerson, notifyTargets:notifyTargets,
+    findPerson:findPerson, notifyTargets:notifyTargets, findLink:findLink, linkLabel:linkLabel,
     tick:function(){ if(clockTick) clockTick(); },
     sync:{ changes:listChanges, pending:hasPending, save:save, switchList:switchList,
       active:function(){ return active; }, online:function(){ return online; }, booted:function(){ return booted; },

@@ -53,7 +53,10 @@ def ws_apply(hass: HomeAssistant, connection: websocket_api.ActiveConnection, ms
     if not (todo := _todo(hass, connection, msg)):
         return
     if not todo.can_use(connection.user.id, msg["list_id"]):
-        connection.send_error(msg["id"], "unauthorized", "That list belongs to someone else.")
+        connection.send_error(msg["id"], "unauthorized", "That list isn't yours to see.")
+        return
+    if not todo.can_edit(connection.user.id, msg["list_id"]):
+        connection.send_error(msg["id"], "read_only", "The Family list is view only for you.")
         return
     connection.send_result(msg["id"], todo.apply(msg["list_id"], msg["changes"], connection.user))
 
@@ -65,7 +68,7 @@ def ws_archive(hass: HomeAssistant, connection: websocket_api.ActiveConnection, 
     if not (todo := _todo(hass, connection, msg)):
         return
     if not todo.can_use(connection.user.id, msg["list_id"]):
-        connection.send_error(msg["id"], "unauthorized", "That list belongs to someone else.")
+        connection.send_error(msg["id"], "unauthorized", "That list isn't yours to see.")
         return
     connection.send_result(msg["id"], {"entries": todo.archive(msg["list_id"])})
 
