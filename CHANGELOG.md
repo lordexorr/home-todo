@@ -7,7 +7,7 @@
 - **Improved: Undo after removing a category** from the category picker.
 - **Fix: A task ticked off on two devices at once** is now logged once, not twice.
 - **Fix: Devices & services shows the name set under Configure**, not "Home To-Do".
-- **Behind the scenes: Code tidy-up.** Nothing changes for you.
+- **Behind the scenes: Code tidy-up.**
 
 ## 0.5.0
 
